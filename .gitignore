@@ -1,0 +1,13 @@
+
+# Compiled python code
+*.pyc
+
+# Examples targets (static libraries and executables)
+*.a
+*.run
+
+# Build files
+build
+
+# Temporary directory
+tmp

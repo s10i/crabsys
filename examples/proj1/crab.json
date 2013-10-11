@@ -1,0 +1,15 @@
+{
+    "sources": [
+        "main.cpp"
+    ],
+    "dependencies": [
+        {
+            "path": "../proj2"
+        }
+    ],
+    "executables": [
+        {
+            "name": "main.run"
+        }
+    ]
+}

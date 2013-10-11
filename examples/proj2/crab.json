@@ -1,0 +1,14 @@
+{
+    "project_name": "proj2",
+    "sources": [
+        "func.cpp"
+    ],
+    "includes": [
+        "."
+    ],
+    "libraries": [
+        {
+            "name": "proj2"
+        }
+    ]
+}
