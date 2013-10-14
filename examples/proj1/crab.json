@@ -13,7 +13,17 @@
                     "name": "proj2"
                 }
             ],
-            "flags": "-Wall"
+            "flags": "-Wall",
+            "system_specific": {
+                "linux": {
+                    "flags": "-DSMARTT_UTILS_OS_LINUX",
+                    "dependencies": [
+                        {
+                            "cmake": "OpenSSL"
+                        }
+                    ]
+                }
+            }
         }
     ]
 }

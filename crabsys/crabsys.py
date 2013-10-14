@@ -188,12 +188,43 @@ def process_library(target_info, context):
 
 
 #############################################################################
+## System specific ##
+#####################
+def append_attribute(target, source, attribute, empty_value, prefix):
+    if attribute in source:
+        if attribute not in target:
+            target[attribute] = empty_value
+        target[attribute] += prefix + source[attribute]
+
+def add_system_specific_info(target_info, system_info, context):
+    append_attribute(target_info, system_info, 'flags', '', ' ')
+    append_attribute(target_info, system_info, 'sources', [], [])
+    append_attribute(target_info, system_info, 'dependencies', [], [])
+    append_attribute(target_info, system_info, 'includes', [], [])
+
+def process_system_specific(target_info, context):
+    if 'system_specific' in target_info:
+        for system in target_info['system_specific']:
+            if system == 'linux':
+                system = 'linux2'
+
+            if system == sys.platform:
+                add_system_specific_info(target_info,
+                    target_info['system_specific'][system],
+                    context)
+#############################################################################
+
+
+
+#############################################################################
 ## Targets ##
 #############
 def process_target(target_info, context):
     context.current_target = target_info
     if 'flags' not in target_info:
         target_info['flags'] = ''
+
+    process_system_specific(target_info, context)
 
     dependencies = process_dependencies(target_info, context)
     sources = process_target_sources(target_info, context)
