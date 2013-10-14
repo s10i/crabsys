@@ -5,20 +5,49 @@ import os
 import os.path
 import sys
 import subprocess
+import multiprocessing
 
 resources_dir = os.path.dirname(os.path.realpath(__file__)) + '/resources'
 build_folder_relative_path = 'build/.build'
 targets_relative_path = 'build/'
 
 
+class GlobalContext:
+    def __init__(self):
+        self.projects = {}
+
+    def add_project(self, project_name):
+        if project_name in self.projects:
+            return True
+        else:
+            self.projects[project_name] = True
+            return False
+
 class Context:
-    def __init__(self, build_info, current_dir, parent_context):
-        self.build_info = build_info
+    def __init__(self, current_dir, crab_file_path, parent_context):
         self.current_dir = current_dir
         self.parent_context = parent_context
         self.cmake_libraries = {}
         self.cmake_includes = {}
         self.current_target = None
+        self.crab_file_path = crab_file_path
+
+        # Read crab file and parse as json
+        self.build_info = json.loads(get_file_content(crab_file_path))
+
+        if 'project_name' not in self.build_info:
+            print crab_file_path + ': project name not defined, using folder name'
+            self.build_info['project_name'] =\
+                os.path.basename(os.path.dirname(crab_file_path))
+
+        self.project_name = self.build_info['project_name']
+
+        if parent_context is not None:
+            self.global_context = parent_context.global_context
+        else:
+            self.global_context = GlobalContext()
+
+        self.already_processed = self.global_context.add_project(self.project_name)
 
     def init_cmake_dependencies(self, target_info):
         target_name = target_info['name']
@@ -164,7 +193,6 @@ def process_executable(target_info, context):
     return executable_template.format(
         name=target_info['name'],
         target_path=context.current_dir+'/'+targets_relative_path,
-        project_name=context.build_info['project_name'],
         cmake_libraries=context.cmake_libraries[target_info['name']],
         flags=target_info['flags'],
         sources_lists=context.sources_lists
@@ -180,7 +208,6 @@ def process_library(target_info, context):
     return library_template.format(
         name=target_info['name'],
         target_path=context.current_dir+'/'+targets_relative_path,
-        project_name=context.build_info['project_name'],
         cmake_libraries=context.cmake_libraries[target_info['name']],
         flags=target_info['flags'],
         sources_lists=context.sources_lists
@@ -350,15 +377,10 @@ def process(current_dir, parent_context=None):
     except OSError, e:
         pass
 
-    # Read crab file and parse as json
-    build_info = json.loads(get_file_content(crab_file_path))
+    context = Context(current_dir, crab_file_path, parent_context)
 
-    context = Context(build_info, current_dir, parent_context)
-
-    if 'project_name' not in build_info:
-        print crab_file_path + ': project name not defined, using folder name'
-        build_info['project_name'] =\
-            os.path.basename(os.path.dirname(crab_file_path))
+    if context.already_processed:
+        return
 
     sources_lists = process_sources_lists(context)
     targets = process_targets(context)
@@ -366,7 +388,7 @@ def process(current_dir, parent_context=None):
     # Create CMakeLists file content
     cmake_file_content = cmake_file_template.format(
             module_dir=resources_dir,
-            project_name=build_info['project_name'],
+            project_name=context.project_name,
             targets=targets,
             sources_lists=sources_lists
         )
@@ -389,7 +411,8 @@ def run_cmake():
     return subprocess.call(command, shell=True)
 
 def run_make():
-    command = 'make -C ' + build_folder_relative_path
+    cpu_count = multiprocessing.cpu_count()
+    command = 'make -C ' + build_folder_relative_path + ' -j' + str(cpu_count)
     return subprocess.call(command, shell=True)
 
 def main():

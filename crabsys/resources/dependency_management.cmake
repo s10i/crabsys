@@ -46,14 +46,28 @@ IF(NOT dependency_macros_defined EQUAL 1)
     ########################################################################
     # Exports a library
     macro(export_lib_macro DEP_NAME)
+        LIST(APPEND ${DEP_NAME}_LIB_INCLUDE_DIRS ${${DEP_NAME}_INCLUDE_DIRS})
+        LIST(APPEND ${DEP_NAME}_LIB_INCLUDE_DIRS ${${DEP_NAME}_LIBS_INCLUDE_DIRS})
+
+        LIST(APPEND ${DEP_NAME}_LIB_LINK_LIBS ${${DEP_NAME}_LIB})
+        LIST(APPEND ${DEP_NAME}_LIB_LINK_LIBS ${${DEP_NAME}_CMAKE_LIBS})
+        LIST(APPEND ${DEP_NAME}_LIB_LINK_LIBS ${${DEP_NAME}_LIBS_LINK_LIBS})
+
+        LIST(APPEND CURRENT_LIBS ${DEP_NAME})
+
+        # Set everything locally
+        SET(${DEP_NAME}_INCLUDE_DIRS ${${DEP_NAME}_LIB_INCLUDE_DIRS})
+        SET(${DEP_NAME}_LINK_LIBS ${${DEP_NAME}_LIB_LINK_LIBS})
+
+        foreach(f ${LIBS})
+            SET(${f}_INCLUDE_DIRS ${${f}_INCLUDE_DIRS})
+            SET(${f}_LINK_LIBS ${${f}_LINK_LIBS})
+        endforeach(f)
+
+        SET(CURRENT_LIBS ${CURRENT_LIBS})
+
+        # Set everything in parent scope
         IF( DEFINED DO_EXPORT )
-            LIST(APPEND ${DEP_NAME}_LIB_INCLUDE_DIRS ${${DEP_NAME}_INCLUDE_DIRS})
-            LIST(APPEND ${DEP_NAME}_LIB_INCLUDE_DIRS ${${DEP_NAME}_LIBS_INCLUDE_DIRS})
-
-            LIST(APPEND ${DEP_NAME}_LIB_LINK_LIBS ${${DEP_NAME}_LIB})
-            LIST(APPEND ${DEP_NAME}_LIB_LINK_LIBS ${${DEP_NAME}_CMAKE_LIBS})
-            LIST(APPEND ${DEP_NAME}_LIB_LINK_LIBS ${${DEP_NAME}_LIBS_LINK_LIBS})
-
             SET(${DEP_NAME}_INCLUDE_DIRS ${${DEP_NAME}_LIB_INCLUDE_DIRS} PARENT_SCOPE)
             SET(${DEP_NAME}_LINK_LIBS ${${DEP_NAME}_LIB_LINK_LIBS} PARENT_SCOPE)
 
@@ -62,7 +76,6 @@ IF(NOT dependency_macros_defined EQUAL 1)
                 SET(${f}_LINK_LIBS ${${f}_LINK_LIBS} PARENT_SCOPE)
             endforeach(f)
 
-            LIST(APPEND CURRENT_LIBS ${DEP_NAME})
             SET(CURRENT_LIBS ${CURRENT_LIBS} PARENT_SCOPE)
         ENDIF()
     endmacro(export_lib_macro)
