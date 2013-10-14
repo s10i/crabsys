@@ -1,11 +1,19 @@
 {
+    "sources_lists": [
+        {
+            "name": "main_sources",
+            "sources": [
+                "main.cpp",
+                "file1.cpp"
+            ]
+        }
+    ],
     "targets": [
         {
             "name": "main.run",
             "type": "executable",
-            "sources": [
-                "main.cpp",
-                "file1.cpp"
+            "sources_lists": [
+                "main_sources"
             ],
             "dependencies": [
                 {

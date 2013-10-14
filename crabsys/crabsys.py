@@ -47,14 +47,14 @@ def get_file_content(file_path):
 ## Templates ##
 ###############
 executable_template = ''+\
-    'add_executable({name} ${{{name}_SRCS}})\n'+\
+    'add_executable({name} ${{{name}_SRCS}} {sources_lists})\n'+\
     'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
     'set_target_properties({name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY '+\
         '{target_path})\n'+\
     'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{flags}")\n'
 
 library_template = ''+\
-    'add_library({name} ${{{name}_SRCS}})\n'+\
+    'add_library({name} ${{{name}_SRCS}} {sources_lists})\n'+\
     'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
     'set_target_properties({name} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY '+\
         '{target_path})\n'+\
@@ -64,7 +64,7 @@ library_template = ''+\
 export_template = ''+\
     'export_lib_macro({name})\n'
 
-target_sources_template = ''+\
+sources_template = ''+\
     'set({name}_SRCS {sources})\n'
 
 target_includes_variable_template = ''+\
@@ -166,7 +166,8 @@ def process_executable(target_info, context):
         target_path=context.current_dir+'/'+targets_relative_path,
         project_name=context.build_info['project_name'],
         cmake_libraries=context.cmake_libraries[target_info['name']],
-        flags=target_info['flags']
+        flags=target_info['flags'],
+        sources_lists=context.sources_lists
     )
 #############################################################################
 
@@ -181,7 +182,8 @@ def process_library(target_info, context):
         target_path=context.current_dir+'/'+targets_relative_path,
         project_name=context.build_info['project_name'],
         cmake_libraries=context.cmake_libraries[target_info['name']],
-        flags=target_info['flags']
+        flags=target_info['flags'],
+        sources_lists=context.sources_lists
     )
 #############################################################################
 
@@ -228,11 +230,12 @@ def process_target(target_info, context):
 
     dependencies = process_dependencies(target_info, context)
     sources = process_target_sources(target_info, context)
+    context.sources_lists = process_target_sources_lists(target_info, context)
     includes = process_target_includes(target_info, context)
     target = ''
     export = export_template.format(name=target_info['name'])
 
-    if sources != '':
+    if sources != '' or context.sources_lists != '':
         if target_info['type'] == 'executable':
             target = process_executable(target_info, context)
         elif target_info['type'] == 'library':
@@ -259,14 +262,49 @@ def process_sources(sources, context):
          for source in sources]
     )
 
+def process_sources_list(sources_list, context):
+    definition = ''
+    if 'name' in sources_list:
+        definition += sources_template.format(
+            name = sources_list['name'],
+            sources = process_sources(sources_list['sources'], context)
+        )
+
+    return definition + sources_template.format(
+            name = "__LIST_" + str(context.sources_list_index),
+            sources = process_sources(sources_list['sources'], context)
+        )
+
+def process_sources_lists(context):
+    definitions = ''
+
+    if 'sources_lists' in context.build_info:
+        sources_lists = context.build_info['sources_lists']
+        for index, sources_list in enumerate(sources_lists):
+            context.sources_list_index = index
+            definitions += process_sources_list(sources_list, context)
+
+    return definitions
+
 def process_target_sources(target_info, context):
     if 'sources' not in target_info:
         return ''
 
-    return target_sources_template.format(
+    return sources_template.format(
             name = target_info['name'],
             sources = process_sources(target_info['sources'], context)
         )
+
+def process_target_sources_lists(target_info, context):
+    sources_lists = ''
+    if 'sources_lists' in target_info:
+        for list_id in target_info['sources_lists']:
+            if isinstance(list_id, basestring):
+                sources_lists += ' ${' + list_id + '_SRCS}'
+            elif isinstance(list_id, int):
+                sources_lists += ' ${__LIST_' + str(list_id) + '_SRCS}'
+
+    return sources_lists
 #############################################################################
 
 
@@ -317,22 +355,20 @@ def process(current_dir, parent_context=None):
 
     context = Context(build_info, current_dir, parent_context)
 
-    if 'cpp_flags' not in build_info:
-        build_info['cpp_flags'] = ''
-    if 'includes' not in build_info:
-        build_info['includes'] = ''
     if 'project_name' not in build_info:
         print crab_file_path + ': project name not defined, using folder name'
         build_info['project_name'] =\
             os.path.basename(os.path.dirname(crab_file_path))
 
+    sources_lists = process_sources_lists(context)
     targets = process_targets(context)
 
     # Create CMakeLists file content
     cmake_file_content = cmake_file_template.format(
             module_dir=resources_dir,
             project_name=build_info['project_name'],
-            targets=targets
+            targets=targets,
+            sources_lists=sources_lists
         )
 
     # Make sure the 'build' folder exists

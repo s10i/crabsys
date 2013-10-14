@@ -6,4 +6,6 @@ include(dependency_management)
 
 project ({project_name})
 
+{sources_lists}
+
 {targets}
