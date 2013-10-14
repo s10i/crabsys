@@ -16,6 +16,8 @@ class Context:
         self.build_info = build_info
         self.current_dir = current_dir
         self.parent_context = parent_context
+        self.cmake_libraries = ''
+        self.cmake_includes = ''
 
 def get_file_content(file_path):
     file_handle = open(file_path, 'r')
@@ -31,13 +33,13 @@ def get_file_content(file_path):
 ###############
 executable_template = ''+\
     'add_executable({name} ${{{project_name}_SRCS}})\n'+\
-    'target_link_libraries({name} ${{LIBS_LINK_LIBS}})\n'+\
+    'target_link_libraries({name} ${{LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
     'set_target_properties({name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY '+\
         '{target_path})\n'
 
 library_template = ''+\
     'add_library({name} ${{{project_name}_SRCS}})\n'+\
-    'target_link_libraries({name} ${{LIBS_LINK_LIBS}})\n'+\
+    'target_link_libraries({name} ${{LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
     'LIST(APPEND {project_name}_LIBS {name})\n'+\
     'set_target_properties({name} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY '+\
         '{target_path})\n'
@@ -47,6 +49,12 @@ repository_dependency_template = ''+\
 
 path_dependency_template = ''+\
     'include_lib_macro_internal({build_path} {build_path})\n'
+
+cmake_dependency_template = ''+\
+    'find_package({name} REQUIRED)\n'
+
+cmake_dependency_search_path_template = ''+\
+    'set(CMAKE_MODULE_PATH ${{CMAKE_MODULE_PATH}} "{search_path}")\n'
 
 def init_templates():
     templates_dir = resources_dir + '/templates'
@@ -60,13 +68,24 @@ def init_templates():
 #############################################################################
 ## Dependencies ##
 ##################
+def process_cmake_dependency(dependency_info, context):
+    name = dependency_info['cmake']
+    context.cmake_libraries += ' ${' + name.upper() + '_LIBRARIES}'
+    context.cmake_includes +=  ' ${' + name.upper() + '_INCLUDE_DIR}'
+
+    search_path_include = ''
+    if 'search_path' in dependency_info:
+        search_path = context.current_dir + '/' +\
+                      dependency_info['search_path']
+        search_path_include = cmake_dependency_search_path_template.format(
+                search_path=search_path
+            )
+
+    return search_path_include + cmake_dependency_template.format(name=name)
+
 def process_repository_dependency(dependency_info, context):
     return repository_dependency_template.format(
         repository_url=dependency_info['repository']
-    )
-
-    return path_dependency_template.format(
-        build_path=dependency_build_folder_path
     )
 
 def process_path_dependency(dependency_info, context):
@@ -87,6 +106,8 @@ def process_dependency(dependency_info, context):
         return process_repository_dependency(dependency_info, context)
     elif 'path' in dependency_info:
         return process_path_dependency(dependency_info, context)
+    elif 'cmake' in dependency_info:
+        return process_cmake_dependency(dependency_info, context)
 
     return ''
 
@@ -107,7 +128,8 @@ def process_executable(executable_info, context):
     return executable_template.format(
         name=executable_info['name'],
         target_path=context.current_dir+'/'+targets_relative_path,
-        project_name=context.build_info['project_name']
+        project_name=context.build_info['project_name'],
+        cmake_libraries=context.cmake_libraries
     )
 
 def process_executables(context):
@@ -127,7 +149,8 @@ def process_library(library_info, context):
     return library_template.format(
         name=library_info['name'],
         target_path=context.current_dir+'/'+targets_relative_path,
-        project_name=context.build_info['project_name']
+        project_name=context.build_info['project_name'],
+        cmake_libraries=context.cmake_libraries
     )
 
 def process_libraries(context):
@@ -144,6 +167,9 @@ def process_libraries(context):
 ## Sources ##
 #############
 def process_sources(context):
+    if 'sources' not in context.build_info:
+        return ''
+
     return '\n'.join(
         [context.current_dir+"/"+source
          for source in context.build_info['sources']]
@@ -159,7 +185,7 @@ def process_includes(context):
     return '\n'.join(
         [context.current_dir+"/"+include_dir
          for include_dir in context.build_info['includes']]
-    )
+    ) + context.cmake_includes
 #############################################################################
 
 
@@ -174,8 +200,8 @@ def process(current_dir, parent_context=None):
         cmake_file_last_modification = os.stat(cmake_lists_file_path).st_mtime
         crab_file_last_modification = os.stat(crab_file_path).st_mtime
 
-        if crab_file_last_modification < cmake_file_last_modification:
-            return
+        #if crab_file_last_modification < cmake_file_last_modification:
+        #    return
     except OSError, e:
         pass
 

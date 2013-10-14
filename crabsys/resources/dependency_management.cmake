@@ -29,7 +29,8 @@ IF(NOT dependency_macros_defined EQUAL 1)
     ########################################################################
     # Includes a library - low level macro
     macro(include_lib_macro_internal LIB_SEARCH_DIR LIB_BINARY_DIR)
-        get_filename_component(lib_dir_name ${LIB_SEARCH_DIR} NAME)
+        get_filename_component(lib_path ${LIB_SEARCH_DIR}/../../ REALPATH)
+        get_filename_component(lib_dir_name ${lib_path} NAME)
 
         LIST(FIND CURRENT_LIBS "${lib_dir_name}" contains_lib)
 
@@ -77,7 +78,8 @@ IF(NOT dependency_macros_defined EQUAL 1)
                 SET(${${f}_LIB_DIR_NAME}_LIBNAME ${f} PARENT_SCOPE)
             endforeach(f)
 
-            get_filename_component(lib_dir_name ${CMAKE_CURRENT_LIST_DIR} NAME)
+            get_filename_component(lib_path ${CMAKE_CURRENT_LIST_DIR}/../../ REALPATH)
+            get_filename_component(lib_dir_name ${lib_path} NAME)
             LIST(APPEND CURRENT_LIBS ${lib_dir_name})
             SET(CURRENT_LIBS ${CURRENT_LIBS} PARENT_SCOPE)
 
