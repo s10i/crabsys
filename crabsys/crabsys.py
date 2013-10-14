@@ -16,8 +16,23 @@ class Context:
         self.build_info = build_info
         self.current_dir = current_dir
         self.parent_context = parent_context
-        self.cmake_libraries = ''
-        self.cmake_includes = ''
+        self.cmake_libraries = {}
+        self.cmake_includes = {}
+        self.current_target = None
+
+    def init_cmake_dependencies(self, target_info):
+        target_name = target_info['name']
+
+        self.cmake_libraries[target_name] = ''
+        self.cmake_includes[target_name] = ''
+
+    def append_cmake_dependency(self, target_info, includes, libraries):
+        target_name = target_info['name']
+
+        self.cmake_libraries[target_name] += ' ' + libraries
+        self.cmake_includes[target_name] += ' ' + includes
+
+
 
 def get_file_content(file_path):
     file_handle = open(file_path, 'r')
@@ -32,23 +47,38 @@ def get_file_content(file_path):
 ## Templates ##
 ###############
 executable_template = ''+\
-    'add_executable({name} ${{{project_name}_SRCS}})\n'+\
-    'target_link_libraries({name} ${{LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
+    'add_executable({name} ${{{name}_SRCS}})\n'+\
+    'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
     'set_target_properties({name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY '+\
-        '{target_path})\n'
+        '{target_path})\n'+\
+    'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{flags}")\n'
 
 library_template = ''+\
-    'add_library({name} ${{{project_name}_SRCS}})\n'+\
-    'target_link_libraries({name} ${{LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
-    'LIST(APPEND {project_name}_LIBS {name})\n'+\
+    'add_library({name} ${{{name}_SRCS}})\n'+\
+    'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
     'set_target_properties({name} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY '+\
-        '{target_path})\n'
+        '{target_path})\n'+\
+    'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{flags}")\n'+\
+    'set({name}_LIB {name})\n'
+
+export_template = ''+\
+    'export_lib_macro({name})\n'
+
+target_sources_template = ''+\
+    'set({name}_SRCS {sources})\n'
+
+target_includes_variable_template = ''+\
+    'set({name}_INCLUDE_DIRS {sources})\n'
+
+target_includes_template = ''+\
+    'include_directories(${{{name}_INCLUDE_DIRS}})\n'+\
+    'include_directories(${{{name}_LIBS_INCLUDE_DIRS}})\n'
 
 repository_dependency_template = ''+\
     'include_repo_lib_macro({repository_url})\n'
 
 path_dependency_template = ''+\
-    'include_lib_macro_internal({build_path} {build_path})\n'
+    'include_lib_macro_internal({build_path} {prefix} {name})\n'
 
 cmake_dependency_template = ''+\
     'find_package({name} REQUIRED)\n'
@@ -70,8 +100,9 @@ def init_templates():
 ##################
 def process_cmake_dependency(dependency_info, context):
     name = dependency_info['cmake']
-    context.cmake_libraries += ' ${' + name.upper() + '_LIBRARIES}'
-    context.cmake_includes +=  ' ${' + name.upper() + '_INCLUDE_DIR}'
+    context.append_cmake_dependency(context.current_target,
+                                    '${' + name.upper() + '_INCLUDE_DIR}',
+                                    '${' + name.upper() + '_LIBRARIES}')
 
     search_path_include = ''
     if 'search_path' in dependency_info:
@@ -98,7 +129,9 @@ def process_path_dependency(dependency_info, context):
         build_folder_relative_path
 
     return path_dependency_template.format(
-        build_path=dependency_build_folder_path
+        build_path=dependency_build_folder_path,
+        prefix=context.current_target['name'],
+        name=dependency_info['name']
     )
 
 def process_dependency(dependency_info, context):
@@ -111,11 +144,14 @@ def process_dependency(dependency_info, context):
 
     return ''
 
-def process_dependencies(context):
+def process_dependencies(target_info, context):
     dependencies_includes = ''
-    if 'dependencies' in context.build_info:
-        for dependency in context.build_info['dependencies']:
+    context.init_cmake_dependencies(target_info)
+
+    if 'dependencies' in target_info:
+        for dependency in target_info['dependencies']:
             dependencies_includes += process_dependency(dependency, context)
+
     return dependencies_includes
 #############################################################################
 
@@ -124,20 +160,14 @@ def process_dependencies(context):
 #############################################################################
 ## Executables ##
 #################
-def process_executable(executable_info, context):
+def process_executable(target_info, context):
     return executable_template.format(
-        name=executable_info['name'],
+        name=target_info['name'],
         target_path=context.current_dir+'/'+targets_relative_path,
         project_name=context.build_info['project_name'],
-        cmake_libraries=context.cmake_libraries
+        cmake_libraries=context.cmake_libraries[target_info['name']],
+        flags=target_info['flags']
     )
-
-def process_executables(context):
-    executables_definitions = ''
-    if 'executables' in context.build_info:
-        for executable in context.build_info['executables']:
-            executables_definitions += process_executable(executable, context)
-    return executables_definitions
 #############################################################################
 
 
@@ -145,20 +175,46 @@ def process_executables(context):
 #############################################################################
 ## Libraries ##
 ###############
-def process_library(library_info, context):
+def process_library(target_info, context):
     return library_template.format(
-        name=library_info['name'],
+        name=target_info['name'],
         target_path=context.current_dir+'/'+targets_relative_path,
         project_name=context.build_info['project_name'],
-        cmake_libraries=context.cmake_libraries
+        cmake_libraries=context.cmake_libraries[target_info['name']],
+        flags=target_info['flags']
     )
+#############################################################################
 
-def process_libraries(context):
-    libraries_definitions = ''
-    if 'libraries' in context.build_info:
-        for library in context.build_info['libraries']:
-            libraries_definitions += process_library(library, context)
-    return libraries_definitions
+
+
+#############################################################################
+## Targets ##
+#############
+def process_target(target_info, context):
+    context.current_target = target_info
+    if 'flags' not in target_info:
+        target_info['flags'] = ''
+
+    dependencies = process_dependencies(target_info, context)
+    sources = process_target_sources(target_info, context)
+    includes = process_target_includes(target_info, context)
+    target = ''
+    export = export_template.format(name=target_info['name'])
+
+    if sources != '':
+        if target_info['type'] == 'executable':
+            target = process_executable(target_info, context)
+        elif target_info['type'] == 'library':
+            target = process_library(target_info, context)
+
+    return '\n'.join([dependencies, includes, sources, target, export])
+
+def process_targets(context):
+    targets_definitions = ''
+    if 'targets' in context.build_info:
+        for target in context.build_info['targets']:
+            targets_definitions += process_target(target, context)
+    return targets_definitions
 #############################################################################
 
 
@@ -166,14 +222,20 @@ def process_libraries(context):
 #############################################################################
 ## Sources ##
 #############
-def process_sources(context):
-    if 'sources' not in context.build_info:
-        return ''
-
+def process_sources(sources, context):
     return '\n'.join(
         [context.current_dir+"/"+source
-         for source in context.build_info['sources']]
+         for source in sources]
     )
+
+def process_target_sources(target_info, context):
+    if 'sources' not in target_info:
+        return ''
+
+    return target_sources_template.format(
+            name = target_info['name'],
+            sources = process_sources(target_info['sources'], context)
+        )
 #############################################################################
 
 
@@ -181,11 +243,25 @@ def process_sources(context):
 #############################################################################
 ## Includes ##
 #############
-def process_includes(context):
+def process_includes(includes, context):
+    current_target_name = context.current_target['name']
+
     return '\n'.join(
         [context.current_dir+"/"+include_dir
-         for include_dir in context.build_info['includes']]
-    ) + context.cmake_includes
+         for include_dir in includes]
+    ) + context.cmake_includes[current_target_name]
+
+def process_target_includes(target_info, context):
+    include_variable = ''
+    if 'includes' in target_info:
+        include_variable = target_includes_variable_template.format(
+                name = target_info['name'],
+                sources = process_includes(target_info['includes'], context)
+            )
+
+    return include_variable + target_includes_template.format(
+            name = target_info['name']
+        )
 #############################################################################
 
 
@@ -219,22 +295,13 @@ def process(current_dir, parent_context=None):
         build_info['project_name'] =\
             os.path.basename(os.path.dirname(crab_file_path))
 
-    dependencies_includes = process_dependencies(context)
-    executables_definitions = process_executables(context)
-    libraries_definitions = process_libraries(context)
-    source_files_list = process_sources(context)
-    include_dirs_list = process_includes(context)
+    targets = process_targets(context)
 
     # Create CMakeLists file content
     cmake_file_content = cmake_file_template.format(
             module_dir=resources_dir,
             project_name=build_info['project_name'],
-            cpp_flags=build_info['cpp_flags'],
-            dependencies=dependencies_includes,
-            include_dirs=include_dirs_list,
-            sources=source_files_list,
-            executables=executables_definitions,
-            libraries=libraries_definitions
+            targets=targets
         )
 
     # Make sure the 'build' folder exists

@@ -1,14 +1,15 @@
 {
     "project_name": "proj2",
-    "sources": [
-        "func.cpp"
-    ],
-    "includes": [
-        "."
-    ],
-    "libraries": [
+    "targets": [
         {
-            "name": "proj2"
+            "type": "library",
+            "name": "proj2",
+            "sources": [
+                "func.cpp"
+            ],
+            "includes": [
+                "."
+            ]
         }
     ]
 }

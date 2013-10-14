@@ -1,15 +1,19 @@
 {
-    "sources": [
-        "main.cpp"
-    ],
-    "dependencies": [
+    "targets": [
         {
-            "path": "../proj2"
-        }
-    ],
-    "executables": [
-        {
-            "name": "main.run"
+            "name": "main.run",
+            "type": "executable",
+            "sources": [
+                "main.cpp",
+                "file1.cpp"
+            ],
+            "dependencies": [
+                {
+                    "path": "../proj2",
+                    "name": "proj2"
+                }
+            ],
+            "flags": "-Wall"
         }
     ]
 }
