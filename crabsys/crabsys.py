@@ -3,6 +3,7 @@
 import json
 import os
 import os.path
+import errno
 import sys
 import subprocess
 import multiprocessing
@@ -10,6 +11,7 @@ import multiprocessing
 resources_dir = os.path.dirname(os.path.realpath(__file__)) + '/resources'
 build_folder_relative_path = 'build/.build'
 targets_relative_path = 'build/'
+libraries_folder_relative_path = 'libs'
 
 
 class GlobalContext:
@@ -69,6 +71,44 @@ def get_file_content(file_path):
     file_handle.close()
     return content
 
+def extract_repository_name_from_url(repo_url):
+    last_slash_index = repo_url.rfind('/')
+    repo_name = repo_url[last_slash_index+1:]
+
+    if repo_name[-4:] == '.git':
+        repo_name = repo_name[:-4]
+
+    return repo_name
+
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc: # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else: raise
+
+def git_command(params=None, directory=None):
+    original_working_directory = os.getcwd()
+
+    os.chdir(directory)
+    return_code = subprocess.call(['git'] + params, shell=False)
+
+    os.chdir(original_working_directory)
+
+    return return_code
+
+def git_clone(url, directory=None):
+    if git_command(params=['clone', url], directory=directory) != 0:
+        raise Exception('Error cloning repository: ' + url)
+
+def git_status(directory=None):
+    if git_command(params=['status'], directory=directory) != 0:
+        raise Exception('Error getting repository status: ' + directory)
+
+def git_pull(directory=None):
+    if git_command(params=['pull'], directory=directory) != 0:
+        raise Exception('Error running git pull: ' + directory)
 
 
 
@@ -144,9 +184,35 @@ def process_cmake_dependency(dependency_info, context):
     return search_path_include + cmake_dependency_template.format(name=name)
 
 def process_repository_dependency(dependency_info, context):
-    return repository_dependency_template.format(
-        repository_url=dependency_info['repository']
-    )
+    repo_url = dependency_info['repository']
+    repo_name = extract_repository_name_from_url(repo_url)
+
+    libs_dir = os.path.abspath(context.current_dir + '/' +\
+        libraries_folder_relative_path)
+
+    dependency_absolute_path = libs_dir + '/' + repo_name
+
+    if os.path.exists(dependency_absolute_path):
+        if os.path.isdir(dependency_absolute_path):
+            git_status(directory=dependency_absolute_path)
+            git_pull(directory=dependency_absolute_path)
+
+            return process_path_dependency({
+                "path": libraries_folder_relative_path + '/' + repo_name,
+                "name": dependency_info['name']
+            }, context)
+        else:
+            raise Exception('Repository dependency path exists but is not' +\
+                            ' a directory: ' + dependency_absolute_path)
+    else:
+        mkdir_p(os.path.abspath(libs_dir))
+
+        git_clone(repo_url, directory=libs_dir)        
+
+        return process_path_dependency({
+            "path": libraries_folder_relative_path + '/' + repo_name,
+            "name": dependency_info['name']
+        }, context)
 
 def process_path_dependency(dependency_info, context):
     dependency_absolute_path = os.path.abspath(context.current_dir + '/' +\
