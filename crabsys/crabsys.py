@@ -80,6 +80,9 @@ def extract_repository_name_from_url(repo_url):
 
     return repo_name
 
+def add_prefix_and_join(values, prefix, separator):
+    return separator.join([prefix+value for value in values])
+
 def mkdir_p(path):
     try:
         os.makedirs(path)
@@ -88,15 +91,18 @@ def mkdir_p(path):
             pass
         else: raise
 
-def git_command(params=None, directory=None):
+def system_command(params=None, directory=None):
     original_working_directory = os.getcwd()
 
     os.chdir(directory)
-    return_code = subprocess.call(['git'] + params, shell=False)
+    return_code = subprocess.call(params, shell=False)
 
     os.chdir(original_working_directory)
 
     return return_code
+
+def git_command(params=None, directory=None):
+    return system_command(['git'] + params, directory)
 
 def git_clone(url, directory=None):
     if git_command(params=['clone', url], directory=directory) != 0:
@@ -120,14 +126,16 @@ executable_template = ''+\
     'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
     'set_target_properties({name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY '+\
         '{target_path})\n'+\
-    'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{flags}")\n'
+    'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{compile_flags}")\n'+\
+    'set_target_properties({name} PROPERTIES LINK_FLAGS "{link_flags}")\n'
 
 library_template = ''+\
     'add_library({name} ${{{name}_SRCS}} {sources_lists})\n'+\
     'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
     'set_target_properties({name} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY '+\
         '{target_path})\n'+\
-    'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{flags}")\n'+\
+    'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{compile_flags}")\n'+\
+    'set_target_properties({name} PROPERTIES LINK_FLAGS "{link_flags}")\n'+\
     'set({name}_LIB {name})\n'
 
 export_template = ''+\
@@ -148,6 +156,11 @@ repository_dependency_template = ''+\
 
 path_dependency_template = ''+\
     'include_lib_macro_internal({build_path} {prefix} {name})\n'
+
+custom_dependency_template = ''+\
+    'LIST(APPEND {name}_INCLUDE_DIRS {includes})\n'+\
+    'LIST(APPEND {name}_LINK_LIBS {libs})\n'+\
+    '_append_lib_info({prefix} {name})\n'
 
 cmake_dependency_template = ''+\
     'find_package({name} REQUIRED)\n'
@@ -215,19 +228,42 @@ def process_repository_dependency(dependency_info, context):
         }, context)
 
 def process_path_dependency(dependency_info, context):
-    dependency_absolute_path = os.path.abspath(context.current_dir + '/' +\
-        dependency_info['path'])
-
-    process(dependency_absolute_path, context)
+    if os.path.isabs(dependency_info['path']):
+        dependency_absolute_path = dependency_info['path']
+    else:
+        dependency_absolute_path = os.path.abspath(context.current_dir + '/' +\
+            dependency_info['path'])
 
     dependency_build_folder_path = dependency_absolute_path + '/' +\
-        build_folder_relative_path
+            build_folder_relative_path
 
-    return path_dependency_template.format(
-        build_path=dependency_build_folder_path,
-        prefix=context.current_target['name'],
-        name=dependency_info['name']
-    )
+    process(dependency_absolute_path, dependency_info, context)
+
+    if "type" in dependency_info:
+        dependency_type = dependency_info["type"]
+        if dependency_type == "custom":
+            return custom_dependency_template.format(
+                includes=add_prefix_and_join(dependency_info["include_dirs"],
+                                             dependency_absolute_path+'/',
+                                             ' '),
+                libs=add_prefix_and_join(dependency_info["lib_files"],
+                                         dependency_absolute_path+'/',
+                                         ' '),
+                prefix=context.current_target['name'],
+                name=dependency_info['name']
+            )
+        else:
+            return path_dependency_template.format(
+                build_path=dependency_build_folder_path,
+                prefix=context.current_target['name'],
+                name=dependency_info['name']
+            )
+    else:
+        return path_dependency_template.format(
+            build_path=dependency_build_folder_path,
+            prefix=context.current_target['name'],
+            name=dependency_info['name']
+        )
 
 def process_dependency(dependency_info, context):
     if 'repository' in dependency_info:
@@ -260,7 +296,8 @@ def process_executable(target_info, context):
         name=target_info['name'],
         target_path=context.current_dir+'/'+targets_relative_path,
         cmake_libraries=context.cmake_libraries[target_info['name']],
-        flags=target_info['flags'],
+        compile_flags=target_info['compile_flags']+target_info['flags'],
+        link_flags=target_info['link_flags']+target_info['flags'],
         sources_lists=context.sources_lists
     )
 #############################################################################
@@ -275,7 +312,8 @@ def process_library(target_info, context):
         name=target_info['name'],
         target_path=context.current_dir+'/'+targets_relative_path,
         cmake_libraries=context.cmake_libraries[target_info['name']],
-        flags=target_info['flags'],
+        compile_flags=target_info['compile_flags']+' '+target_info['flags'],
+        link_flags=target_info['link_flags']+' '+target_info['flags'],
         sources_lists=context.sources_lists
     )
 #############################################################################
@@ -293,6 +331,8 @@ def append_attribute(target, source, attribute, empty_value, prefix):
 
 def add_system_specific_info(target_info, system_info, context):
     append_attribute(target_info, system_info, 'flags', '', ' ')
+    append_attribute(target_info, system_info, 'compile_flags', '', ' ')
+    append_attribute(target_info, system_info, 'link_flags', '', ' ')
     append_attribute(target_info, system_info, 'sources', [], [])
     append_attribute(target_info, system_info, 'dependencies', [], [])
     append_attribute(target_info, system_info, 'includes', [], [])
@@ -318,6 +358,10 @@ def process_target(target_info, context):
     context.current_target = target_info
     if 'flags' not in target_info:
         target_info['flags'] = ''
+    if 'compile_flags' not in target_info:
+        target_info['compile_flags'] = ''
+    if 'link_flags' not in target_info:
+        target_info['link_flags'] = ''
 
     process_system_specific(target_info, context)
 
@@ -429,7 +473,29 @@ def process_target_includes(target_info, context):
 
 
 #############################################################################
-def process(current_dir, parent_context=None):
+def process(current_dir, build_info=None, parent_context=None):
+    if build_info and "type" in build_info:
+        build_type = build_info["type"]
+
+        if build_type == "custom":
+            process_custom_build(current_dir, build_info, parent_context)
+        elif build_type == "crab" or build_type == "crabsys":
+            process_crabsys_build(current_dir, parent_context)
+    else:
+        process_crabsys_build(current_dir, parent_context)
+
+
+def process_custom_build(current_dir, build_info, parent_context=None):
+    if "build-steps" in build_info:
+        for step in build_info["build-steps"]:
+            command = [ step["command"] ]
+            if "params" in step:
+                command += step["params"]
+            system_command(command, current_dir)
+
+
+
+def process_crabsys_build(current_dir, parent_context=None):
     build_folder = current_dir+'/'+build_folder_relative_path
     cmake_lists_file_path = build_folder +'/CMakeLists.txt'
     crab_file_path = current_dir+'/crab.json'
