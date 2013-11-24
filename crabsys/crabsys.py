@@ -33,14 +33,18 @@ class Context:
         self.cmake_includes = {}
         self.current_target = None
         self.crab_file_path = crab_file_path
+        self.dynamic_libs = []
 
-        # Read crab file and parse as json
-        self.build_info = json.loads(get_file_content(crab_file_path))
+        if crab_file_path:
+            # Read crab file and parse as json
+            self.build_info = json.loads(get_file_content(crab_file_path))
+        else:
+            self.build_info = {}
 
         if 'project_name' not in self.build_info:
-            print crab_file_path + ': project name not defined, using folder name'
+            print current_dir + ': project name not defined, using folder name'
             self.build_info['project_name'] =\
-                os.path.basename(os.path.dirname(crab_file_path))
+                os.path.basename(os.path.dirname(current_dir))
 
         self.project_name = self.build_info['project_name']
 
@@ -50,6 +54,10 @@ class Context:
             self.global_context = GlobalContext()
 
         self.already_processed = self.global_context.add_project(self.project_name)
+
+        self.children = []
+        if parent_context:
+            parent_context.addChildContext(self)
 
     def init_cmake_dependencies(self, target_info):
         target_name = target_info['name']
@@ -63,6 +71,19 @@ class Context:
         self.cmake_libraries[target_name] += ' ' + libraries
         self.cmake_includes[target_name] += ' ' + includes
 
+    def addChildContext(self, context):
+        self.children.append(context)
+
+    def addDynamicLib(self, lib):
+        self.dynamic_libs.append(lib)
+
+    def getDynamicLibsRecursively(self):
+        dynamic_libs_deps = []
+        for child in self.children:
+            dynamic_libs_deps += [os.path.join(child.current_dir, lib) for lib in child.dynamic_libs]
+            dynamic_libs_deps += child.getDynamicLibsRecursively()
+
+        return dynamic_libs_deps
 
 
 def get_file_content(file_path):
@@ -127,7 +148,11 @@ executable_template = ''+\
     'set_target_properties({name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY '+\
         '{target_path})\n'+\
     'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{compile_flags}")\n'+\
-    'set_target_properties({name} PROPERTIES LINK_FLAGS "{link_flags}")\n'
+    'set_target_properties({name} PROPERTIES LINK_FLAGS "{link_flags}")\n'+\
+    'IF(${{CMAKE_SYSTEM_NAME}} MATCHES "Darwin")\n'+\
+    '   set_target_properties({name} PROPERTIES INSTALL_RPATH "@loader_path/.")\n'+\
+    '   set_target_properties({name} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)\n'+\
+    'ENDIF()\n'
 
 library_template = ''+\
     'add_library({name} ${{{name}_SRCS}} {sources_lists})\n'+\
@@ -167,6 +192,18 @@ cmake_dependency_template = ''+\
 
 cmake_dependency_search_path_template = ''+\
     'set(CMAKE_MODULE_PATH ${{CMAKE_MODULE_PATH}} "{search_path}")\n'
+
+dependencies_post_processing_template = ''+\
+    'add_custom_command(TARGET {target} PRE_BUILD\n'+\
+    '                   COMMAND ${{CMAKE_COMMAND}} -E make_directory {libs_path})\n'+\
+    'add_custom_command(TARGET {target} PRE_BUILD\n'+\
+    '                   COMMAND ${{CMAKE_COMMAND}} -E copy {lib_original_path} {lib_destination_path})\n'+\
+    'IF(${{CMAKE_SYSTEM_NAME}} MATCHES "Darwin")\n'+\
+    '   add_custom_command(TARGET {target} PRE_BUILD\n'+\
+    '                      COMMAND install_name_tool -id {lib_id} {lib_original_path})\n'+\
+    '   add_custom_command(TARGET {target} PRE_BUILD\n'+\
+    '                      COMMAND install_name_tool -id {lib_id} {lib_destination_path})\n'+\
+    'ENDIF()\n'
 
 def init_templates():
     templates_dir = resources_dir + '/templates'
@@ -378,6 +415,27 @@ def process_target(target_info, context):
         elif target_info['type'] == 'library':
             target = process_library(target_info, context)
 
+    if 'dependencies_dynamic_libs_destination_path' in target_info:
+        libs_path = target_info['dependencies_dynamic_libs_destination_path']
+
+        if os.path.isabs(libs_path):
+            libs_dest_path = libs_path+'/'
+            libs_id_path = libs_path+'/'
+        else:
+            libs_dest_path = os.path.join(context.current_dir,
+                                     targets_relative_path,
+                                     libs_path)+'/'
+            libs_id_path = os.path.join('@rpath', libs_path)
+
+        for dynamic_lib in context.getDynamicLibsRecursively():
+            target += dependencies_post_processing_template.format(
+                    target = target_info['name'],
+                    lib_id = os.path.join(libs_id_path, os.path.basename(dynamic_lib)),
+                    lib_original_path = dynamic_lib,
+                    lib_destination_path = os.path.join(libs_dest_path, os.path.basename(dynamic_lib)),
+                    libs_path=libs_dest_path
+                )
+
     return '\n'.join([dependencies, includes, sources, target, export])
 
 def process_targets(context):
@@ -486,12 +544,20 @@ def process(current_dir, build_info=None, parent_context=None):
 
 
 def process_custom_build(current_dir, build_info, parent_context=None):
+    context = Context(current_dir, None, parent_context)
+
     if "build-steps" in build_info:
         for step in build_info["build-steps"]:
             command = [ step["command"] ]
             if "params" in step:
                 command += step["params"]
             system_command(command, current_dir)
+
+    if "lib_files" in build_info:
+        for lib in build_info["lib_files"]:
+            lib_extension = os.path.splitext(lib)[1]
+            if lib_extension == ".dylib" or lib_extension == ".so":
+                context.addDynamicLib(lib)
 
 
 
