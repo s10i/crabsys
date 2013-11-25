@@ -8,9 +8,11 @@ import sys
 import subprocess
 import multiprocessing
 
-resources_dir = os.path.dirname(os.path.realpath(__file__)) + '/resources'
-build_folder_relative_path = 'build/.build'
-targets_relative_path = 'build/'
+from os.path import join as pjoin
+
+resources_dir = pjoin(os.path.dirname(os.path.realpath(__file__)), 'resources')
+build_folder_relative_path = pjoin('build', '.build')
+targets_relative_path = 'build'
 libraries_folder_relative_path = 'libs'
 
 
@@ -80,7 +82,7 @@ class Context:
     def getDynamicLibsRecursively(self):
         dynamic_libs_deps = []
         for child in self.children:
-            dynamic_libs_deps += [os.path.join(child.current_dir, lib) for lib in child.dynamic_libs]
+            dynamic_libs_deps += [pjoin(child.current_dir, lib) for lib in child.dynamic_libs]
             dynamic_libs_deps += child.getDynamicLibsRecursively()
 
         return dynamic_libs_deps
@@ -101,8 +103,8 @@ def extract_repository_name_from_url(repo_url):
 
     return repo_name
 
-def add_prefix_and_join(values, prefix, separator):
-    return separator.join([prefix+value for value in values])
+def add_path_prefix_and_join(values, prefix, separator):
+    return separator.join([pjoin(prefix, value) for value in values])
 
 def mkdir_p(path):
     try:
@@ -215,10 +217,10 @@ dependencies_post_processing_template = ''+\
     'ENDIF()\n'
 
 def init_templates():
-    templates_dir = resources_dir + '/templates'
+    templates_dir = pjoin(resources_dir, 'templates')
 
     global cmake_file_template
-    cmake_file_template = get_file_content(templates_dir+"/CMakeLists.txt")
+    cmake_file_template = get_file_content(pjoin(templates_dir, "CMakeLists.txt"))
 #############################################################################
 
 
@@ -234,8 +236,8 @@ def process_cmake_dependency(dependency_info, context):
 
     search_path_include = ''
     if 'search_path' in dependency_info:
-        search_path = context.current_dir + '/' +\
-                      dependency_info['search_path']
+        search_path = pjoin(context.current_dir,
+                            dependency_info['search_path'])
         search_path_include = cmake_dependency_search_path_template.format(
                 search_path=search_path
             )
@@ -246,10 +248,10 @@ def process_repository_dependency(dependency_info, context):
     repo_url = dependency_info['repository']
     repo_name = extract_repository_name_from_url(repo_url)
 
-    libs_dir = os.path.abspath(context.current_dir + '/' +\
-        libraries_folder_relative_path)
+    libs_dir = os.path.abspath(pjoin(context.current_dir,
+                                     libraries_folder_relative_path))
 
-    dependency_absolute_path = libs_dir + '/' + repo_name
+    dependency_absolute_path = pjoin(libs_dir, repo_name)
 
     if os.path.exists(dependency_absolute_path):
         if os.path.isdir(dependency_absolute_path):
@@ -257,7 +259,7 @@ def process_repository_dependency(dependency_info, context):
             git_pull(directory=dependency_absolute_path)
 
             return process_path_dependency({
-                "path": libraries_folder_relative_path + '/' + repo_name,
+                "path": pjoin(libraries_folder_relative_path, repo_name),
                 "name": dependency_info['name']
             }, context)
         else:
@@ -269,7 +271,7 @@ def process_repository_dependency(dependency_info, context):
         git_clone(repo_url, directory=libs_dir)        
 
         return process_path_dependency({
-            "path": libraries_folder_relative_path + '/' + repo_name,
+            "path": pjoin(libraries_folder_relative_path, repo_name),
             "name": dependency_info['name']
         }, context)
 
@@ -277,11 +279,12 @@ def process_path_dependency(dependency_info, context):
     if os.path.isabs(dependency_info['path']):
         dependency_absolute_path = dependency_info['path']
     else:
-        dependency_absolute_path = os.path.abspath(context.current_dir + '/' +\
-            dependency_info['path'])
+        dependency_absolute_path = os.path.abspath(
+            pjoin(context.current_dir, dependency_info['path'])
+        )
 
-    dependency_build_folder_path = dependency_absolute_path + '/' +\
-            build_folder_relative_path
+    dependency_build_folder_path = pjoin(dependency_absolute_path,
+        build_folder_relative_path)
 
     process(dependency_absolute_path, dependency_info, context)
 
@@ -289,12 +292,12 @@ def process_path_dependency(dependency_info, context):
         dependency_type = dependency_info["type"]
         if dependency_type == "custom":
             return custom_dependency_template.format(
-                includes=add_prefix_and_join(dependency_info["include_dirs"],
-                                             dependency_absolute_path+'/',
-                                             ' '),
-                libs=add_prefix_and_join(dependency_info["lib_files"],
-                                         dependency_absolute_path+'/',
-                                         ' '),
+                includes=add_path_prefix_and_join(dependency_info["include_dirs"],
+                                                  dependency_absolute_path,
+                                                  ' '),
+                libs=add_path_prefix_and_join(dependency_info["lib_files"],
+                                              dependency_absolute_path,
+                                              ' '),
                 prefix=context.current_target['name'],
                 name=dependency_info['name']
             )
@@ -340,7 +343,7 @@ def process_dependencies(target_info, context):
 def process_executable(target_info, context):
     return executable_template.format(
         name=target_info['name'],
-        target_path=context.current_dir+'/'+targets_relative_path,
+        target_path=pjoin(context.current_dir, targets_relative_path),
         cmake_libraries=context.cmake_libraries[target_info['name']],
         compile_flags=target_info['compile_flags']+target_info['flags'],
         link_flags=target_info['link_flags']+target_info['flags'],
@@ -356,7 +359,7 @@ def process_executable(target_info, context):
 def process_library(target_info, context):
     return library_template.format(
         name=target_info['name'],
-        target_path=context.current_dir+'/'+targets_relative_path,
+        target_path=pjoin(context.current_dir, targets_relative_path),
         cmake_libraries=context.cmake_libraries[target_info['name']],
         compile_flags=target_info['compile_flags']+' '+target_info['flags'],
         link_flags=target_info['link_flags']+' '+target_info['flags'],
@@ -428,20 +431,20 @@ def process_target(target_info, context):
         libs_path = target_info['dependencies_dynamic_libs_destination_path']
 
         if os.path.isabs(libs_path):
-            libs_dest_path = libs_path+'/'
-            libs_id_path = libs_path+'/'
+            libs_dest_path = libs_path
+            libs_id_path = libs_path
         else:
-            libs_dest_path = os.path.join(context.current_dir,
+            libs_dest_path = pjoin(context.current_dir,
                                      targets_relative_path,
-                                     libs_path)+'/'
-            libs_id_path = os.path.join('@rpath', libs_path)
+                                     libs_path)
+            libs_id_path = pjoin('@rpath', libs_path)
 
         for dynamic_lib in context.getDynamicLibsRecursively():
             target += dependencies_post_processing_template.format(
                     target = target_info['name'],
-                    lib_id = os.path.join(libs_id_path, os.path.basename(dynamic_lib)),
+                    lib_id = pjoin(libs_id_path, os.path.basename(dynamic_lib)),
                     lib_original_path = dynamic_lib,
-                    lib_destination_path = os.path.join(libs_dest_path, os.path.basename(dynamic_lib)),
+                    lib_destination_path = pjoin(libs_dest_path, os.path.basename(dynamic_lib)),
                     libs_path=libs_dest_path
                 )
 
@@ -462,7 +465,7 @@ def process_targets(context):
 #############
 def process_sources(sources, context):
     return '\n'.join(
-        [context.current_dir+"/"+source
+        [pjoin(context.current_dir, source)
          for source in sources]
     )
 
@@ -520,7 +523,7 @@ def process_includes(includes, context):
     current_target_name = context.current_target['name']
 
     return '\n'.join(
-        [context.current_dir+"/"+include_dir
+        [pjoin(context.current_dir, include_dir)
          for include_dir in includes]
     ) + context.cmake_includes[current_target_name]
 
@@ -571,9 +574,9 @@ def process_custom_build(current_dir, build_info, parent_context=None):
 
 
 def process_crabsys_build(current_dir, parent_context=None):
-    build_folder = current_dir+'/'+build_folder_relative_path
-    cmake_lists_file_path = build_folder +'/CMakeLists.txt'
-    crab_file_path = current_dir+'/crab.json'
+    build_folder = pjoin(current_dir, build_folder_relative_path)
+    cmake_lists_file_path = pjoin(build_folder, 'CMakeLists.txt')
+    crab_file_path = pjoin(current_dir, 'crab.json')
 
     try:
         cmake_file_last_modification = os.stat(cmake_lists_file_path).st_mtime
@@ -608,16 +611,18 @@ def process_crabsys_build(current_dir, parent_context=None):
     cmake_file = open(cmake_lists_file_path, 'w')
     cmake_file.write(cmake_file_content)
     cmake_file.close()
+
+    run_cmake(build_folder)
 #############################################################################
 
 
 
 #############################################################################
-def run_cmake():
+def run_cmake(directory=None):
     cmake_process = subprocess.Popen(['cmake', '.'],
                                      stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE,
-                                     cwd=build_folder_relative_path,
+                                     cwd=directory,
                                      shell=False)
 
     stdout, stderr = cmake_process.communicate()
@@ -649,7 +654,6 @@ def main():
     if len(sys.argv) > 1:
         if sys.argv[1] == 'build':
             process(os.path.abspath('.'))
-            return_code_cmake = run_cmake()
             return_code_make = run_make()
     else:
         print "Watchoowameedo?"
