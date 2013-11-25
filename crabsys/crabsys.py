@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import json
 import os
 import os.path
 import errno
@@ -9,332 +8,19 @@ import subprocess
 import multiprocessing
 
 from os.path import join as pjoin
+from context import Context, GlobalContext, build_folder_relative_path, targets_relative_path
+from utils import *
+from templates import *
+from dependencies import process_dependencies, process_target_dynamic_lib_dependecies
 
 resources_dir = pjoin(os.path.dirname(os.path.realpath(__file__)), 'resources')
-build_folder_relative_path = pjoin('build', '.build')
-targets_relative_path = 'build'
 libraries_folder_relative_path = 'libs'
-
-
-class GlobalContext:
-    def __init__(self):
-        self.projects = {}
-
-    def add_project(self, project_name):
-        if project_name in self.projects:
-            return True
-        else:
-            self.projects[project_name] = True
-            return False
-
-class Context:
-    def __init__(self, current_dir, crab_file_path, parent_context):
-        self.current_dir = current_dir
-        self.parent_context = parent_context
-        self.cmake_libraries = {}
-        self.cmake_includes = {}
-        self.current_target = None
-        self.crab_file_path = crab_file_path
-        self.dynamic_libs = []
-
-        if crab_file_path:
-            # Read crab file and parse as json
-            self.build_info = json.loads(get_file_content(crab_file_path))
-        else:
-            self.build_info = {}
-
-        if 'project_name' not in self.build_info:
-            print current_dir + ': project name not defined, using folder name'
-            self.build_info['project_name'] =\
-                os.path.basename(os.path.dirname(current_dir))
-
-        self.project_name = self.build_info['project_name']
-
-        if parent_context is not None:
-            self.global_context = parent_context.global_context
-        else:
-            self.global_context = GlobalContext()
-
-        self.already_processed = self.global_context.add_project(self.project_name)
-
-        self.children = []
-        if parent_context:
-            parent_context.addChildContext(self)
-
-    def init_cmake_dependencies(self, target_info):
-        target_name = target_info['name']
-
-        self.cmake_libraries[target_name] = ''
-        self.cmake_includes[target_name] = ''
-
-    def append_cmake_dependency(self, target_info, includes, libraries):
-        target_name = target_info['name']
-
-        self.cmake_libraries[target_name] += ' ' + libraries
-        self.cmake_includes[target_name] += ' ' + includes
-
-    def addChildContext(self, context):
-        self.children.append(context)
-
-    def addDynamicLib(self, lib):
-        self.dynamic_libs.append(lib)
-
-    def getDynamicLibsRecursively(self):
-        dynamic_libs_deps = []
-        for child in self.children:
-            dynamic_libs_deps += [pjoin(child.current_dir, lib) for lib in child.dynamic_libs]
-            dynamic_libs_deps += child.getDynamicLibsRecursively()
-
-        return dynamic_libs_deps
-
-
-def get_file_content(file_path):
-    file_handle = open(file_path, 'r')
-    content = file_handle.read()
-    file_handle.close()
-    return content
-
-def extract_repository_name_from_url(repo_url):
-    last_slash_index = repo_url.rfind('/')
-    repo_name = repo_url[last_slash_index+1:]
-
-    if repo_name[-4:] == '.git':
-        repo_name = repo_name[:-4]
-
-    return repo_name
-
-def add_path_prefix_and_join(values, prefix, separator):
-    return separator.join([pjoin(prefix, value) for value in values])
-
-def mkdir_p(path):
-    try:
-        os.makedirs(path)
-    except OSError as exc: # Python >2.5
-        if exc.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else: raise
-
-def system_command(params=None, directory=None):
-    original_working_directory = os.getcwd()
-
-    os.chdir(directory)
-    return_code = subprocess.call(params, shell=False)
-
-    os.chdir(original_working_directory)
-
-    return return_code
-
-def git_command(params=None, directory=None):
-    return system_command(['git'] + params, directory)
-
-def git_clone(url, directory=None):
-    if git_command(params=['clone', url], directory=directory) != 0:
-        raise Exception('Error cloning repository: ' + url)
-
-def git_status(directory=None):
-    if git_command(params=['status'], directory=directory) != 0:
-        raise Exception('Error getting repository status: ' + directory)
-
-def git_pull(directory=None):
-    if git_command(params=['pull'], directory=directory) != 0:
-        raise Exception('Error running git pull: ' + directory)
-
-cmake_output_variables = {
-    "name": "__crabsys_target_name=",
-    "location": "__crabsys_target_location="
-}
-
-#############################################################################
-## Templates ##
-###############
-executable_template = ''+\
-    'add_executable({name} ${{{name}_SRCS}} {sources_lists})\n'+\
-    'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
-    'set_target_properties({name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY '+\
-        '{target_path})\n'+\
-    'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{compile_flags}")\n'+\
-    'set_target_properties({name} PROPERTIES LINK_FLAGS "{link_flags}")\n'+\
-    'IF(${{CMAKE_SYSTEM_NAME}} MATCHES "Darwin")\n'+\
-    '   set_target_properties({name} PROPERTIES INSTALL_RPATH "@loader_path/.")\n'+\
-    '   set_target_properties({name} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)\n'+\
-    'ENDIF()\n'+\
-    'get_target_property(__crabsys_target_{name}_location {name} LOCATION)\n'+\
-    'MESSAGE("' + cmake_output_variables["name"] + '{name}")\n'+\
-    'MESSAGE("' + cmake_output_variables["location"] + '${{__crabsys_target_{name}_location}}")\n'
-
-library_template = ''+\
-    'add_library({name} ${{{name}_SRCS}} {sources_lists})\n'+\
-    'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
-    'set_target_properties({name} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY '+\
-        '{target_path})\n'+\
-    'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{compile_flags}")\n'+\
-    'set_target_properties({name} PROPERTIES LINK_FLAGS "{link_flags}")\n'+\
-    'set({name}_LIB {name})\n'+\
-    'get_target_property(__crabsys_target_{name}_location {name} LOCATION)\n'+\
-    'MESSAGE("' + cmake_output_variables["name"] + '{name}")\n'+\
-    'MESSAGE("' + cmake_output_variables["location"] + '${{__crabsys_target_{name}_location}}")\n'
-
-export_template = ''+\
-    'export_lib_macro({name})\n'
-
-sources_template = ''+\
-    'set({name}_SRCS {sources})\n'
-
-target_includes_variable_template = ''+\
-    'set({name}_INCLUDE_DIRS {sources})\n'
-
-target_includes_template = ''+\
-    'include_directories(${{{name}_INCLUDE_DIRS}})\n'+\
-    'include_directories(${{{name}_LIBS_INCLUDE_DIRS}})\n'
-
-repository_dependency_template = ''+\
-    'include_repo_lib_macro({repository_url})\n'
-
-path_dependency_template = ''+\
-    'include_lib_macro_internal({build_path} {prefix} {name})\n'
-
-custom_dependency_template = ''+\
-    'LIST(APPEND {name}_INCLUDE_DIRS {includes})\n'+\
-    'LIST(APPEND {name}_LINK_LIBS {libs})\n'+\
-    '_append_lib_info({prefix} {name})\n'
-
-cmake_dependency_template = ''+\
-    'find_package({name} REQUIRED)\n'
-
-cmake_dependency_search_path_template = ''+\
-    'set(CMAKE_MODULE_PATH ${{CMAKE_MODULE_PATH}} "{search_path}")\n'
-
-dependencies_post_processing_template = ''+\
-    'add_custom_command(TARGET {target} PRE_BUILD\n'+\
-    '                   COMMAND ${{CMAKE_COMMAND}} -E make_directory {libs_path})\n'+\
-    'add_custom_command(TARGET {target} PRE_BUILD\n'+\
-    '                   COMMAND ${{CMAKE_COMMAND}} -E copy {lib_original_path} {lib_destination_path})\n'+\
-    'IF(${{CMAKE_SYSTEM_NAME}} MATCHES "Darwin")\n'+\
-    '   add_custom_command(TARGET {target} PRE_BUILD\n'+\
-    '                      COMMAND install_name_tool -id {lib_id} {lib_original_path})\n'+\
-    '   add_custom_command(TARGET {target} PRE_BUILD\n'+\
-    '                      COMMAND install_name_tool -id {lib_id} {lib_destination_path})\n'+\
-    'ENDIF()\n'
 
 def init_templates():
     templates_dir = pjoin(resources_dir, 'templates')
 
     global cmake_file_template
     cmake_file_template = get_file_content(pjoin(templates_dir, "CMakeLists.txt"))
-#############################################################################
-
-
-
-#############################################################################
-## Dependencies ##
-##################
-def process_cmake_dependency(dependency_info, context):
-    name = dependency_info['cmake']
-    context.append_cmake_dependency(context.current_target,
-                                    '${' + name.upper() + '_INCLUDE_DIR}',
-                                    '${' + name.upper() + '_LIBRARIES}')
-
-    search_path_include = ''
-    if 'search_path' in dependency_info:
-        search_path = pjoin(context.current_dir,
-                            dependency_info['search_path'])
-        search_path_include = cmake_dependency_search_path_template.format(
-                search_path=search_path
-            )
-
-    return search_path_include + cmake_dependency_template.format(name=name)
-
-def process_repository_dependency(dependency_info, context):
-    repo_url = dependency_info['repository']
-    repo_name = extract_repository_name_from_url(repo_url)
-
-    libs_dir = os.path.abspath(pjoin(context.current_dir,
-                                     libraries_folder_relative_path))
-
-    dependency_absolute_path = pjoin(libs_dir, repo_name)
-
-    if os.path.exists(dependency_absolute_path):
-        if os.path.isdir(dependency_absolute_path):
-            git_status(directory=dependency_absolute_path)
-            git_pull(directory=dependency_absolute_path)
-
-            return process_path_dependency({
-                "path": pjoin(libraries_folder_relative_path, repo_name),
-                "name": dependency_info['name']
-            }, context)
-        else:
-            raise Exception('Repository dependency path exists but is not' +\
-                            ' a directory: ' + dependency_absolute_path)
-    else:
-        mkdir_p(os.path.abspath(libs_dir))
-
-        git_clone(repo_url, directory=libs_dir)        
-
-        return process_path_dependency({
-            "path": pjoin(libraries_folder_relative_path, repo_name),
-            "name": dependency_info['name']
-        }, context)
-
-def process_path_dependency(dependency_info, context):
-    if os.path.isabs(dependency_info['path']):
-        dependency_absolute_path = dependency_info['path']
-    else:
-        dependency_absolute_path = os.path.abspath(
-            pjoin(context.current_dir, dependency_info['path'])
-        )
-
-    dependency_build_folder_path = pjoin(dependency_absolute_path,
-        build_folder_relative_path)
-
-    process(dependency_absolute_path, dependency_info, context)
-
-    if "type" in dependency_info:
-        dependency_type = dependency_info["type"]
-        if dependency_type == "custom":
-            return custom_dependency_template.format(
-                includes=add_path_prefix_and_join(dependency_info["include_dirs"],
-                                                  dependency_absolute_path,
-                                                  ' '),
-                libs=add_path_prefix_and_join(dependency_info["lib_files"],
-                                              dependency_absolute_path,
-                                              ' '),
-                prefix=context.current_target['name'],
-                name=dependency_info['name']
-            )
-        else:
-            return path_dependency_template.format(
-                build_path=dependency_build_folder_path,
-                prefix=context.current_target['name'],
-                name=dependency_info['name']
-            )
-    else:
-        return path_dependency_template.format(
-            build_path=dependency_build_folder_path,
-            prefix=context.current_target['name'],
-            name=dependency_info['name']
-        )
-
-def process_dependency(dependency_info, context):
-    if 'repository' in dependency_info:
-        return process_repository_dependency(dependency_info, context)
-    elif 'path' in dependency_info:
-        return process_path_dependency(dependency_info, context)
-    elif 'cmake' in dependency_info:
-        return process_cmake_dependency(dependency_info, context)
-
-    return ''
-
-def process_dependencies(target_info, context):
-    dependencies_includes = ''
-    context.init_cmake_dependencies(target_info)
-
-    if 'dependencies' in target_info:
-        for dependency in target_info['dependencies']:
-            dependencies_includes += process_dependency(dependency, context)
-
-    return dependencies_includes
-#############################################################################
-
 
 
 #############################################################################
@@ -427,26 +113,7 @@ def process_target(target_info, context):
         elif target_info['type'] == 'library':
             target = process_library(target_info, context)
 
-    if 'dependencies_dynamic_libs_destination_path' in target_info:
-        libs_path = target_info['dependencies_dynamic_libs_destination_path']
-
-        if os.path.isabs(libs_path):
-            libs_dest_path = libs_path
-            libs_id_path = libs_path
-        else:
-            libs_dest_path = pjoin(context.current_dir,
-                                     targets_relative_path,
-                                     libs_path)
-            libs_id_path = pjoin('@rpath', libs_path)
-
-        for dynamic_lib in context.getDynamicLibsRecursively():
-            target += dependencies_post_processing_template.format(
-                    target = target_info['name'],
-                    lib_id = pjoin(libs_id_path, os.path.basename(dynamic_lib)),
-                    lib_original_path = dynamic_lib,
-                    lib_destination_path = pjoin(libs_dest_path, os.path.basename(dynamic_lib)),
-                    libs_path=libs_dest_path
-                )
+    target += process_target_dynamic_lib_dependecies(target_info, context)
 
     return '\n'.join([dependencies, includes, sources, target, export])
 
@@ -556,7 +223,7 @@ def process(current_dir, build_info=None, parent_context=None):
 
 
 def process_custom_build(current_dir, build_info, parent_context=None):
-    context = Context(current_dir, None, parent_context)
+    context = Context(current_dir, None, parent_context, process)
 
     if "build-steps" in build_info:
         for step in build_info["build-steps"]:
@@ -587,7 +254,7 @@ def process_crabsys_build(current_dir, parent_context=None):
     except OSError, e:
         pass
 
-    context = Context(current_dir, crab_file_path, parent_context)
+    context = Context(current_dir, crab_file_path, parent_context, process)
 
     if context.already_processed:
         return
