@@ -137,7 +137,10 @@ def git_pull(directory=None):
     if git_command(params=['pull'], directory=directory) != 0:
         raise Exception('Error running git pull: ' + directory)
 
-
+cmake_output_variables = {
+    "name": "__crabsys_target_name=",
+    "location": "__crabsys_target_location="
+}
 
 #############################################################################
 ## Templates ##
@@ -152,7 +155,10 @@ executable_template = ''+\
     'IF(${{CMAKE_SYSTEM_NAME}} MATCHES "Darwin")\n'+\
     '   set_target_properties({name} PROPERTIES INSTALL_RPATH "@loader_path/.")\n'+\
     '   set_target_properties({name} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)\n'+\
-    'ENDIF()\n'
+    'ENDIF()\n'+\
+    'get_target_property(__crabsys_target_{name}_location {name} LOCATION)\n'+\
+    'MESSAGE("' + cmake_output_variables["name"] + '{name}")\n'+\
+    'MESSAGE("' + cmake_output_variables["location"] + '${{__crabsys_target_{name}_location}}")\n'
 
 library_template = ''+\
     'add_library({name} ${{{name}_SRCS}} {sources_lists})\n'+\
@@ -161,7 +167,10 @@ library_template = ''+\
         '{target_path})\n'+\
     'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{compile_flags}")\n'+\
     'set_target_properties({name} PROPERTIES LINK_FLAGS "{link_flags}")\n'+\
-    'set({name}_LIB {name})\n'
+    'set({name}_LIB {name})\n'+\
+    'get_target_property(__crabsys_target_{name}_location {name} LOCATION)\n'+\
+    'MESSAGE("' + cmake_output_variables["name"] + '{name}")\n'+\
+    'MESSAGE("' + cmake_output_variables["location"] + '${{__crabsys_target_{name}_location}}")\n'
 
 export_template = ''+\
     'export_lib_macro({name})\n'
@@ -605,8 +614,29 @@ def process_crabsys_build(current_dir, parent_context=None):
 
 #############################################################################
 def run_cmake():
-    command = 'cd ' + build_folder_relative_path + '; cmake .'
-    return subprocess.call(command, shell=True)
+    cmake_process = subprocess.Popen(['cmake', '.'],
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     cwd=build_folder_relative_path,
+                                     shell=False)
+
+    stdout, stderr = cmake_process.communicate()
+
+    retcode = cmake_process.poll()
+
+    current_project_name = None
+    targets = {}
+    for line in stderr.split('\n'):
+        if line.startswith(cmake_output_variables['name']):
+            current_project_name = line[len(cmake_output_variables['name']):]
+            targets[current_project_name] = {}
+        elif line.startswith(cmake_output_variables['location']):
+            current_project_location = line[len(cmake_output_variables['location']):]
+            targets[current_project_name]['location'] = current_project_location
+
+    #print targets
+
+    return retcode
 
 def run_make():
     cpu_count = multiprocessing.cpu_count()
