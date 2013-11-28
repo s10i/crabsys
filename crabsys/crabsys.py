@@ -15,7 +15,6 @@ from templates import *
 from dependencies import process_dependencies, process_target_dynamic_lib_dependecies
 
 resources_dir = pjoin(os.path.dirname(os.path.realpath(__file__)), 'resources')
-libraries_folder_relative_path = 'libs'
 
 def init_templates():
     templates_dir = pjoin(resources_dir, 'templates')

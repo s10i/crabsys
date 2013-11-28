@@ -7,6 +7,7 @@ from utils import get_file_content
 
 build_folder_relative_path = pjoin('build', '.build')
 targets_relative_path = 'build'
+libraries_folder_relative_path = 'libs'
 
 class GlobalContext:
     def __init__(self):
@@ -29,6 +30,7 @@ class Context:
         self.crab_file_path = crab_file_path
         self.dynamic_libs = []
         self.process = process_function
+        self.libs_dir = pjoin(current_dir, libraries_folder_relative_path)
 
         if crab_file_path:
             # Read crab file and parse as json

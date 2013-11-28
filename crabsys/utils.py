@@ -1,8 +1,41 @@
 
 import os
 import subprocess
+import tarfile
+import errno
+import os.path
 
+from sys import stderr
 from os.path import join as pjoin
+
+##############################################################################
+# TAR FILES HANDLING
+resolved = lambda x: os.path.realpath(os.path.abspath(x))
+
+def badpath(path, base):
+    # joinpath will ignore base if path is absolute
+    return not resolved(pjoin(base,path)).startswith(base)
+
+def badlink(info, base):
+    # Links are interpreted relative to the directory containing the link
+    tip = resolved(pjoin(base, dirname(info.name)))
+    return badpath(info.linkname, base=tip)
+
+def safemembers(members):
+    base = resolved(".")
+
+    for finfo in members:
+        if badpath(finfo.name, base):
+            print >>stderr, finfo.name, "is blocked (illegal path)"
+        elif finfo.issym() and badlink(finfo,base):
+            print >>stderr, finfo.name, "is blocked: Hard link to", finfo.linkname
+        elif finfo.islnk() and badlink(finfo,base):
+            print >>stderr, finfo.name, "is blocked: Symlink to", finfo.linkname
+        else:
+            yield finfo
+##############################################################################
+
+
 
 def get_file_content(file_path):
     file_handle = open(file_path, 'r')

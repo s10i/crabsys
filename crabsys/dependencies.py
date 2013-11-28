@@ -1,9 +1,12 @@
 
 import os
 import os.path
+import urllib
+import tarfile
+from urlparse import urlparse
+from os.path import join as pjoin
 
 from context import build_folder_relative_path, targets_relative_path
-from os.path import join as pjoin
 from utils import *
 from templates import *
 
@@ -57,6 +60,28 @@ def process_repository_dependency(dependency_info, context):
             "name": dependency_info['name']
         }, context)
 
+def process_archive_dependency(dependency_info, context):
+    archive_url = dependency_info['archive']
+
+    file_name = os.path.basename(urlparse(archive_url).path)
+    if 'archive_file_name' in dependency_info:
+        file_name = dependency_info['archive_file_name']
+
+    archive_file_path = pjoin(context.libs_dir, file_name)
+    extracted_dir = pjoin(context.libs_dir, archive_file_path+"_extracted")
+
+    if not os.path.isfile(archive_file_path):
+        mkdir_p(context.libs_dir)
+        urllib.urlretrieve (archive_url, archive_file_path)
+
+        if not os.path.isdir(extracted_dir):
+            archive = tarfile.open(archive_file_path)
+            archive.extractall(path=extracted_dir, members=safemembers(archive))
+
+    dependency_info["path"] = pjoin(extracted_dir, dependency_info['archive_path'])
+
+    return process_path_dependency(dependency_info, context)
+
 def process_path_dependency(dependency_info, context):
     if os.path.isabs(dependency_info['path']):
         dependency_absolute_path = dependency_info['path']
@@ -103,6 +128,8 @@ def process_dependency(dependency_info, context):
         return process_path_dependency(dependency_info, context)
     elif 'cmake' in dependency_info:
         return process_cmake_dependency(dependency_info, context)
+    elif 'archive' in dependency_info:
+        return process_archive_dependency(dependency_info, context)
 
     return ''
 
