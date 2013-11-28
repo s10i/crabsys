@@ -6,6 +6,7 @@ import errno
 import sys
 import subprocess
 import multiprocessing
+import re
 
 from os.path import join as pjoin
 from context import Context, GlobalContext, build_folder_relative_path, targets_relative_path
@@ -27,13 +28,19 @@ def init_templates():
 ## Executables ##
 #################
 def process_executable(target_info, context):
+    linux_rpath = ""
+    if "dependencies_dynamic_libs_destination_path" in target_info:
+        linux_rpath = pjoin("$ORIGIN",
+            target_info["dependencies_dynamic_libs_destination_path"])
+
     return executable_template.format(
         name=target_info['name'],
         target_path=pjoin(context.current_dir, targets_relative_path),
         cmake_libraries=context.cmake_libraries[target_info['name']],
         compile_flags=target_info['compile_flags']+target_info['flags'],
-        link_flags=target_info['link_flags']+target_info['flags'],
-        sources_lists=context.sources_lists
+        link_flags=target_info['link_flags']+' '+target_info['flags'],
+        sources_lists=context.sources_lists,
+        linux_rpath=linux_rpath
     )
 #############################################################################
 
@@ -235,7 +242,7 @@ def process_custom_build(current_dir, build_info, parent_context=None):
     if "lib_files" in build_info:
         for lib in build_info["lib_files"]:
             lib_extension = os.path.splitext(lib)[1]
-            if lib_extension == ".dylib" or lib_extension == ".so":
+            if re.match("^(.*)\.dylib", lib) or re.match("^(.*)\.so(\.[0-9]*)?", lib):
                 context.addDynamicLib(lib)
 
 

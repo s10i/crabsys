@@ -18,6 +18,12 @@ executable_template = ''+\
     '   set_target_properties({name} PROPERTIES INSTALL_RPATH "@loader_path/.")\n'+\
     '   set_target_properties({name} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)\n'+\
     'ENDIF()\n'+\
+    'IF(${{CMAKE_SYSTEM_NAME}} MATCHES "Linux")\n'+\
+    '   IF( NOT( "{linux_rpath}" STREQUAL "" ) )\n'+\
+    '      set_target_properties({name} PROPERTIES INSTALL_RPATH "{linux_rpath}")\n'+\
+    '      set_target_properties({name} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)\n'+\
+    '   ENDIF()\n'+\
+    'ENDIF()\n'+\
     'get_target_property(__crabsys_target_{name}_location {name} LOCATION)\n'+\
     'MESSAGE("' + cmake_output_variables["name"] + '{name}")\n'+\
     'MESSAGE("' + cmake_output_variables["location"] + '${{__crabsys_target_{name}_location}}")\n'
