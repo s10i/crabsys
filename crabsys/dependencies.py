@@ -6,7 +6,7 @@ import tarfile
 from urlparse import urlparse
 from os.path import join as pjoin
 
-from context import build_folder_relative_path, targets_relative_path
+from context import build_folder_relative_path, targets_relative_path, libraries_folder_relative_path
 from utils import *
 from templates import *
 
