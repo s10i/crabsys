@@ -35,7 +35,6 @@ def process_executable(target_info, context):
     return executable_template.format(
         name=target_info['name'],
         target_path=pjoin(context.current_dir, targets_relative_path),
-        cmake_libraries=context.cmake_libraries[target_info['name']],
         compile_flags=target_info['compile_flags']+target_info['flags'],
         link_flags=target_info['link_flags']+' '+target_info['flags'],
         sources_lists=context.sources_lists,
@@ -52,7 +51,6 @@ def process_library(target_info, context):
     return library_template.format(
         name=target_info['name'],
         target_path=pjoin(context.current_dir, targets_relative_path),
-        cmake_libraries=context.cmake_libraries[target_info['name']],
         compile_flags=target_info['compile_flags']+' '+target_info['flags'],
         link_flags=target_info['link_flags']+' '+target_info['flags'],
         sources_lists=context.sources_lists
@@ -204,7 +202,7 @@ def process_includes(includes, context):
     return '\n'.join(
         [pjoin(context.current_dir, include_dir)
          for include_dir in includes]
-    ) + context.cmake_includes[current_target_name]
+    )
 
 def process_target_includes(target_info, context):
     include_variable = ''

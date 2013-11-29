@@ -15,9 +15,6 @@ from templates import *
 ##################
 def process_cmake_dependency(dependency_info, context):
     name = dependency_info['cmake']
-    #context.append_cmake_dependency(context.current_target,
-    #                                '${' + name.upper() + '_INCLUDE_DIR}',
-    #                                '${' + name.upper() + '_LIBRARIES}')
 
     search_path_include = ''
     if 'search_path' in dependency_info:
@@ -137,7 +134,6 @@ def process_dependency(dependency_info, context):
 
 def process_dependencies(target_info, context):
     dependencies_includes = ''
-    context.init_cmake_dependencies(target_info)
 
     if 'dependencies' in target_info:
         for dependency in target_info['dependencies']:

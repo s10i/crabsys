@@ -9,7 +9,7 @@ cmake_output_variables = {
 ###############
 executable_template = ''+\
     'add_executable({name} ${{{name}_SRCS}} {sources_lists})\n'+\
-    'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
+    'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}})\n'+\
     'set_target_properties({name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY '+\
         '{target_path})\n'+\
     'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{compile_flags}")\n'+\
@@ -30,7 +30,7 @@ executable_template = ''+\
 
 library_template = ''+\
     'add_library({name} ${{{name}_SRCS}} {sources_lists})\n'+\
-    'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}} {cmake_libraries})\n'+\
+    'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}})\n'+\
     'set_target_properties({name} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY '+\
         '{target_path})\n'+\
     'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{compile_flags}")\n'+\

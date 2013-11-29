@@ -24,8 +24,6 @@ class Context:
     def __init__(self, current_dir, crab_file_path, parent_context, process_function):
         self.current_dir = current_dir
         self.parent_context = parent_context
-        self.cmake_libraries = {}
-        self.cmake_includes = {}
         self.current_target = None
         self.crab_file_path = crab_file_path
         self.dynamic_libs = []
@@ -55,18 +53,6 @@ class Context:
         self.children = []
         if parent_context:
             parent_context.addChildContext(self)
-
-    def init_cmake_dependencies(self, target_info):
-        target_name = target_info['name']
-
-        self.cmake_libraries[target_name] = ''
-        self.cmake_includes[target_name] = ''
-
-    def append_cmake_dependency(self, target_info, includes, libraries):
-        target_name = target_info['name']
-
-        self.cmake_libraries[target_name] += ' ' + libraries
-        self.cmake_includes[target_name] += ' ' + includes
 
     def addChildContext(self, context):
         self.children.append(context)
