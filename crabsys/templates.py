@@ -63,6 +63,8 @@ custom_dependency_template = ''+\
     'LIST(APPEND {name}_INCLUDE_DIRS {includes})\n'+\
     'LIST(APPEND {name}_LINK_LIBS {libs})\n'+\
     '_append_lib_info({prefix} {name})\n'
+    #'add_custom_target(__CRABSYS_DEP_CUSTOM_TARGET_{name})\n'+\
+    #'target_link_libraries(__CRABSYS_DEP_CUSTOM_TARGET_{name} {name}_LINK_LIBS)\n'+\
 
 cmake_dependency_template = ''+\
     'find_package({name} REQUIRED)\n'+\

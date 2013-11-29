@@ -78,13 +78,19 @@ def add_system_specific_info(target_info, system_info, context):
     append_attribute(target_info, system_info, 'dependencies', [], [])
     append_attribute(target_info, system_info, 'includes', [], [])
 
+platform_names = {
+    "linux": "linux2",
+    "linux2": "linux2",
+}
+
 def process_system_specific(target_info, context):
     if 'system_specific' in target_info:
         for system in target_info['system_specific']:
-            if system == 'linux':
-                system = 'linux2'
+            platform = system
+            if system in platform_names:
+                platform = platform_names[system]
 
-            if system == sys.platform:
+            if platform == sys.platform:
                 add_system_specific_info(target_info,
                     target_info['system_specific'][system],
                     context)

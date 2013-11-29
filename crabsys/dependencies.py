@@ -141,7 +141,8 @@ def process_dependencies(target_info, context):
 
     if 'dependencies' in target_info:
         for dependency in target_info['dependencies']:
-            dependencies_includes += process_dependency(dependency, context)
+            definition = process_dependency(dependency, context)
+            dependencies_includes = definition + dependencies_includes
 
     return dependencies_includes
 
