@@ -65,7 +65,10 @@ custom_dependency_template = ''+\
     '_append_lib_info({prefix} {name})\n'
 
 cmake_dependency_template = ''+\
-    'find_package({name} REQUIRED)\n'
+    'find_package({name} REQUIRED)\n'+\
+    'LIST(APPEND __CRABSYS_CMAKE_DEP_{name}_INCLUDE_DIRS ${{{upper_name}_INCLUDE_DIR}})\n'+\
+    'LIST(APPEND __CRABSYS_CMAKE_DEP_{name}_LINK_LIBS ${{{upper_name}_LIBRARIES}})\n'+\
+    '_append_lib_info({prefix} __CRABSYS_CMAKE_DEP_{name})\n'
 
 cmake_dependency_search_path_template = ''+\
     'set(CMAKE_MODULE_PATH ${{CMAKE_MODULE_PATH}} "{search_path}")\n'

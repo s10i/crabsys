@@ -15,9 +15,9 @@ from templates import *
 ##################
 def process_cmake_dependency(dependency_info, context):
     name = dependency_info['cmake']
-    context.append_cmake_dependency(context.current_target,
-                                    '${' + name.upper() + '_INCLUDE_DIR}',
-                                    '${' + name.upper() + '_LIBRARIES}')
+    #context.append_cmake_dependency(context.current_target,
+    #                                '${' + name.upper() + '_INCLUDE_DIR}',
+    #                                '${' + name.upper() + '_LIBRARIES}')
 
     search_path_include = ''
     if 'search_path' in dependency_info:
@@ -27,7 +27,9 @@ def process_cmake_dependency(dependency_info, context):
                 search_path=search_path
             )
 
-    return search_path_include + cmake_dependency_template.format(name=name)
+    return search_path_include + cmake_dependency_template.format(name=name,
+                                    upper_name=name.upper(),
+                                    prefix=context.current_target['name'])
 
 def process_repository_dependency(dependency_info, context):
     repo_url = dependency_info['repository']

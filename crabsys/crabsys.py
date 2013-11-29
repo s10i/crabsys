@@ -236,7 +236,12 @@ def process_custom_build(current_dir, build_info, parent_context=None):
             command = [ step["command"] ]
             if "params" in step:
                 command += step["params"]
-            system_command(command, current_dir)
+
+            directory = current_dir
+            if "directory" in step:
+                directory = pjoin(current_dir, step["directory"])
+
+            system_command(command, directory)
 
     if "lib_files" in build_info:
         for lib in build_info["lib_files"]:
