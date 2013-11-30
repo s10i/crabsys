@@ -12,6 +12,10 @@ executable_template = ''+\
     'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}})\n'+\
     'set_target_properties({name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY '+\
         '{target_path})\n'+\
+    'set_property(TARGET {name}\n'+\
+    '             APPEND\n'+\
+    '             PROPERTY INCLUDE_DIRECTORIES ${{{name}_INCLUDE_DIRS}}\n'+\
+    '                                          ${{{name}_LIBS_INCLUDE_DIRS}})\n'+\
     'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{compile_flags}")\n'+\
     'set_target_properties({name} PROPERTIES LINK_FLAGS "{link_flags}")\n'+\
     'IF(${{CMAKE_SYSTEM_NAME}} MATCHES "Darwin")\n'+\
@@ -33,6 +37,10 @@ library_template = ''+\
     'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}})\n'+\
     'set_target_properties({name} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY '+\
         '{target_path})\n'+\
+    'set_property(TARGET {name}\n'+\
+    '             APPEND\n'+\
+    '             PROPERTY INCLUDE_DIRECTORIES ${{{name}_INCLUDE_DIRS}}\n'+\
+    '                                          ${{{name}_LIBS_INCLUDE_DIRS}})\n'+\
     'set_target_properties({name} PROPERTIES COMPILE_FLAGS "{compile_flags}")\n'+\
     'set_target_properties({name} PROPERTIES LINK_FLAGS "{link_flags}")\n'+\
     'set({name}_LIB {name})\n'+\
@@ -48,13 +56,6 @@ sources_template = ''+\
 
 target_includes_variable_template = ''+\
     'set({name}_INCLUDE_DIRS {sources})\n'
-
-target_includes_template = ''+\
-    'include_directories(${{{name}_INCLUDE_DIRS}})\n'+\
-    'include_directories(${{{name}_LIBS_INCLUDE_DIRS}})\n'
-
-repository_dependency_template = ''+\
-    'include_repo_lib_macro({repository_url})\n'
 
 path_dependency_template = ''+\
     'include_lib_macro_internal({build_path} {prefix} {name})\n'

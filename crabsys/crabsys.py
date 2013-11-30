@@ -212,9 +212,7 @@ def process_target_includes(target_info, context):
                 sources = process_includes(target_info['includes'], context)
             )
 
-    return include_variable + target_includes_template.format(
-            name = target_info['name']
-        )
+    return include_variable
 #############################################################################
 
 
