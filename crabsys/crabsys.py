@@ -2,11 +2,9 @@
 
 import os
 import os.path
-import errno
 import sys
 import subprocess
 import multiprocessing
-import re
 
 from os.path import join as pjoin
 from context import Context, GlobalContext, build_folder_relative_path, targets_relative_path
@@ -239,12 +237,14 @@ def process_custom_build(context):
             if "directory" in step:
                 directory = pjoin(current_dir, step["directory"])
 
-            system_command(command, directory)
+            (retcode, stdout, stderr) = system_command(command, directory)
+            if retcode != 0:
+                print "Command returned non-zero code: %s" % (step["command"])
+                print stderr
 
     if "lib_files" in build_info:
         for lib in build_info["lib_files"]:
-            lib_extension = os.path.splitext(lib)[1]
-            if re.match("^(.*)\.dylib", lib) or re.match("^(.*)\.so(\.[0-9]*)?", lib):
+            if is_dynamic_lib(lib):
                 context.addDynamicLib(lib)
 
 
@@ -255,22 +255,21 @@ def process_crabsys_build(context):
 
     context.generateCMakeListsFile(targets, sources_lists)
 
-    run_cmake(context.build_folder)
+    processed_targets = run_cmake(context.build_folder)
+
+    for target in processed_targets:
+        if is_dynamic_lib(processed_targets[target]["location"]):
+            context.addDynamicLib(lib)
 #############################################################################
 
 
 
 #############################################################################
 def run_cmake(directory=None):
-    cmake_process = subprocess.Popen(['cmake', '.'],
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,
-                                     cwd=directory,
-                                     shell=False)
+    (retcode, stdout, stderr) = system_command(['cmake', '.'], directory)
 
-    stdout, stderr = cmake_process.communicate()
-
-    retcode = cmake_process.poll()
+    if retcode != 0:
+        return None
 
     current_project_name = None
     targets = {}
@@ -282,9 +281,7 @@ def run_cmake(directory=None):
             current_project_location = line[len(cmake_output_variables['location']):]
             targets[current_project_name]['location'] = current_project_location
 
-    #print targets
-
-    return retcode
+    return targets
 
 def run_make():
     cpu_count = multiprocessing.cpu_count()

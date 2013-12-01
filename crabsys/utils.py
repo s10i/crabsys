@@ -4,6 +4,7 @@ import subprocess
 import tarfile
 import errno
 import os.path
+import re
 
 from sys import stderr
 from os.path import join as pjoin
@@ -64,26 +65,35 @@ def mkdir_p(path):
         else: raise
 
 def system_command(params=None, directory=None):
-    original_working_directory = os.getcwd()
+    process = subprocess.Popen(params,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE,
+                               cwd=directory,
+                               shell=False)
 
-    os.chdir(directory)
-    return_code = subprocess.call(params, shell=False)
+    stdout, stderr = process.communicate()
 
-    os.chdir(original_working_directory)
+    retcode = process.poll()
 
-    return return_code
+    return (retcode, stdout, stderr)
 
 def git_command(params=None, directory=None):
     return system_command(['git'] + params, directory)
 
 def git_clone(url, directory=None):
-    if git_command(params=['clone', url], directory=directory) != 0:
-        raise Exception('Error cloning repository: ' + url)
+    (retcode, stdout, stderr) = git_command(params=['clone', url], directory=directory)
+    if retcode != 0:
+        raise Exception('Error cloning repository: ' + url + '\n' + stderr)
 
 def git_status(directory=None):
-    if git_command(params=['status'], directory=directory) != 0:
-        raise Exception('Error getting repository status: ' + directory)
+    (retcode, stdout, stderr) = git_command(params=['status'], directory=directory)
+    if retcode != 0:
+        raise Exception('Error getting repository status: ' + directory + '\n' + stderr)
 
 def git_pull(directory=None):
-    if git_command(params=['pull'], directory=directory) != 0:
-        raise Exception('Error running git pull: ' + directory)
+    (retcode, stdout, stderr) = git_command(params=['pull'], directory=directory)
+    if retcode != 0:
+        raise Exception('Error running git pull: ' + directory + '\n' + stderr)
+
+def is_dynamic_lib(path):
+    return re.match("^(.*)\.dylib", path) or re.match("^(.*)\.so(\.[0-9]*)?", path)
