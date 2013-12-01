@@ -10,8 +10,7 @@ cmake_output_variables = {
 executable_template = ''+\
     'add_executable({name} ${{{name}_SRCS}} {sources_lists})\n'+\
     'target_link_libraries({name} ${{{name}_LIBS_LINK_LIBS}})\n'+\
-    'set_target_properties({name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY '+\
-        '{target_path})\n'+\
+    'set_target_properties({name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY {target_path})\n'+\
     'set_property(TARGET {name}\n'+\
     '             APPEND\n'+\
     '             PROPERTY INCLUDE_DIRECTORIES ${{{name}_INCLUDE_DIRS}}\n'+\
@@ -30,7 +29,8 @@ executable_template = ''+\
     'ENDIF()\n'+\
     'get_target_property(__crabsys_target_{name}_location {name} LOCATION)\n'+\
     'MESSAGE("' + cmake_output_variables["name"] + '{name}")\n'+\
-    'MESSAGE("' + cmake_output_variables["location"] + '${{__crabsys_target_{name}_location}}")\n'
+    'MESSAGE("' + cmake_output_variables["location"] + '${{__crabsys_target_{name}_location}}")\n'+\
+    'export_lib_macro({name})\n'
 
 library_template = ''+\
     'add_library({name} ${{{name}_SRCS}} {sources_lists})\n'+\
@@ -46,9 +46,10 @@ library_template = ''+\
     'set({name}_LIB {name})\n'+\
     'get_target_property(__crabsys_target_{name}_location {name} LOCATION)\n'+\
     'MESSAGE("' + cmake_output_variables["name"] + '{name}")\n'+\
-    'MESSAGE("' + cmake_output_variables["location"] + '${{__crabsys_target_{name}_location}}")\n'
+    'MESSAGE("' + cmake_output_variables["location"] + '${{__crabsys_target_{name}_location}}")\n'+\
+    'export_lib_macro({name})\n'
 
-export_template = ''+\
+custom_target_template = ''+\
     'export_lib_macro({name})\n'
 
 sources_template = ''+\

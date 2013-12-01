@@ -14,14 +14,6 @@ from utils import *
 from templates import *
 from dependencies import process_dependencies, process_target_dynamic_lib_dependecies
 
-resources_dir = pjoin(os.path.dirname(os.path.realpath(__file__)), 'resources')
-
-def init_templates():
-    templates_dir = pjoin(resources_dir, 'templates')
-
-    global cmake_file_template
-    cmake_file_template = get_file_content(pjoin(templates_dir, "CMakeLists.txt"))
-
 
 #############################################################################
 ## Executables ##
@@ -115,17 +107,18 @@ def process_target(target_info, context):
     context.sources_lists = process_target_sources_lists(target_info, context)
     includes = process_target_includes(target_info, context)
     target = ''
-    export = export_template.format(name=target_info['name'])
 
     if sources != '' or context.sources_lists != '':
         if target_info['type'] == 'executable':
             target = process_executable(target_info, context)
         elif target_info['type'] == 'library':
             target = process_library(target_info, context)
+    else:
+        target = custom_target_template.format(name=target_info['name'])
 
     target += process_target_dynamic_lib_dependecies(target_info, context)
 
-    return '\n'.join([dependencies, includes, sources, target, export])
+    return '\n'.join([dependencies, includes, sources, target])
 
 def process_targets(context):
     targets_definitions = ''
@@ -219,19 +212,22 @@ def process_target_includes(target_info, context):
 
 #############################################################################
 def process(current_dir, build_info=None, parent_context=None):
-    if build_info and "type" in build_info:
-        build_type = build_info["type"]
+    context = Context(build_info, current_dir, parent_context, process)
 
-        if build_type == "custom":
-            process_custom_build(current_dir, build_info, parent_context)
-        elif build_type == "crab" or build_type == "crabsys":
-            process_crabsys_build(current_dir, parent_context)
+    if context.already_processed:
+        return
+
+    if context.build_type == "custom":
+        process_custom_build(context)
+    elif context.build_type == "crabsys":
+        process_crabsys_build(context)
     else:
-        process_crabsys_build(current_dir, parent_context)
+        print "Unknown build type: %s\nSkipping %s..." % (context.build_type, context.project_name)
 
 
-def process_custom_build(current_dir, build_info, parent_context=None):
-    context = Context(current_dir, None, parent_context, process)
+def process_custom_build(context):
+    current_dir = context.current_dir
+    build_info = context.build_info
 
     if "build-steps" in build_info:
         for step in build_info["build-steps"]:
@@ -253,46 +249,13 @@ def process_custom_build(current_dir, build_info, parent_context=None):
 
 
 
-def process_crabsys_build(current_dir, parent_context=None):
-    build_folder = pjoin(current_dir, build_folder_relative_path)
-    cmake_lists_file_path = pjoin(build_folder, 'CMakeLists.txt')
-    crab_file_path = pjoin(current_dir, 'crab.json')
-
-    try:
-        cmake_file_last_modification = os.stat(cmake_lists_file_path).st_mtime
-        crab_file_last_modification = os.stat(crab_file_path).st_mtime
-
-        #if crab_file_last_modification < cmake_file_last_modification:
-        #    return
-    except OSError, e:
-        pass
-
-    context = Context(current_dir, crab_file_path, parent_context, process)
-
-    if context.already_processed:
-        return
-
+def process_crabsys_build(context):
     sources_lists = process_sources_lists(context)
     targets = process_targets(context)
 
-    # Create CMakeLists file content
-    cmake_file_content = cmake_file_template.format(
-            module_dir=resources_dir,
-            project_name=context.project_name,
-            targets=targets,
-            sources_lists=sources_lists
-        )
+    context.generateCMakeListsFile(targets, sources_lists)
 
-    # Make sure the 'build' folder exists
-    if not os.path.exists(build_folder):
-        os.makedirs(build_folder)
-
-    # Write CMakeLists.txt file with generated content
-    cmake_file = open(cmake_lists_file_path, 'w')
-    cmake_file.write(cmake_file_content)
-    cmake_file.close()
-
-    run_cmake(build_folder)
+    run_cmake(context.build_folder)
 #############################################################################
 
 
@@ -329,8 +292,6 @@ def run_make():
     return subprocess.call(command, shell=True)
 
 def main():
-    init_templates()
-
     if len(sys.argv) > 1:
         if sys.argv[1] == 'build':
             process(os.path.abspath('.'))
