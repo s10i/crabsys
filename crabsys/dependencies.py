@@ -109,11 +109,11 @@ def process_dependency(dependency_info, context):
 
     return ''
 
-def process_dependencies(target_info, context):
+def process_dependencies(target_info, context, attribute_name='dependencies'):
     dependencies_includes = ''
 
-    if 'dependencies' in target_info:
-        for dependency in target_info['dependencies']:
+    if attribute_name in target_info:
+        for dependency in target_info[attribute_name]:
             definition = process_dependency(dependency, context)
             dependencies_includes = definition + dependencies_includes
 

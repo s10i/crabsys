@@ -101,6 +101,8 @@ def process_target(target_info, context):
     process_system_specific(target_info, context)
 
     dependencies = process_dependencies(target_info, context)
+    process_dependencies(target_info, context, attribute_name="build_dependencies")
+
     sources = process_target_sources(target_info, context)
     context.sources_lists = process_target_sources_lists(target_info, context)
     includes = process_target_includes(target_info, context)
@@ -231,6 +233,7 @@ def process_custom_build(context):
 
     context.current_target = context.build_info
     dependencies = process_dependencies(context.build_info, context)
+    process_dependencies(context.build_info, context, attribute_name="build_dependencies")
 
     if "build-steps" in build_info:
         for step in build_info["build-steps"]:
@@ -264,6 +267,7 @@ def process_custom_build(context):
 def process_cmake_build(context):
     context.current_target = context.build_info
     dependencies = process_dependencies(context.build_info, context)
+    process_dependencies(context.build_info, context, attribute_name="build_dependencies")
 
     search_path_include = ''
     if 'search_path' in context.build_info:
