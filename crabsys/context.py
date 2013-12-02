@@ -50,28 +50,29 @@ class Context:
         self.current_target = None
         self.dynamic_libs = []
 
-        if build_info is None:
-            build_info = {}
+        self.build_info = build_info
+        if self.build_info is None:
+            self.build_info = {}
 
-        if "type" in build_info and build_info["type"] != "crabsys":
-            self.build_info = build_info
+        if "type" in self.build_info:
+            self.build_type = build_info["type"]
+
+            if self.build_type in build_types:
+                self.build_type = build_type[self.build_type]
+        elif "cmake" in self.build_info:
+            self.build_type = "cmake"
         else:
+            self.build_type = "crabsys"
+
+        if self.build_type == "crabsys":
             self.processCrabFile(build_info)
 
         if 'project_name' not in self.build_info:
             print current_dir + ': project name not defined, using folder name'
             self.build_info['project_name'] =\
-                os.path.basename(os.path.dirname(current_dir))
+                os.path.basename(os.path.dirname(current_dir+os.sep))
 
         self.project_name = self.build_info['project_name']
-
-        if self.build_info and "type" in self.build_info:
-            self.build_type = build_info["type"]
-
-            if self.build_type in build_types:
-                self.build_type = build_type[self.build_type]
-        else:
-            self.build_type = "crabsys"
 
         if parent_context is not None:
             self.global_context = parent_context.global_context

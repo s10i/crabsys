@@ -217,6 +217,8 @@ def process(current_dir, build_info=None, parent_context=None):
 
     if context.build_type == "custom":
         process_custom_build(context)
+    elif context.build_type == "cmake":
+        process_cmake_build(context)
     elif context.build_type == "crabsys":
         process_crabsys_build(context)
     else:
@@ -247,6 +249,34 @@ def process_custom_build(context):
             if is_dynamic_lib(lib):
                 context.addDynamicLib(lib)
 
+    target = custom_dependency_template.format(
+        name=context.build_info['name'],
+        includes=add_path_prefix_and_join(build_info["include_dirs"], current_dir, ' '),
+        libs=add_path_prefix_and_join(build_info["lib_files"], current_dir, ' '))
+
+    context.generateCMakeListsFile(target, "")
+    processed_targets = run_cmake(context.build_folder)
+
+
+def process_cmake_build(context):
+    context.current_target = context.build_info
+    dependencies = process_dependencies(context.build_info, context)
+
+    search_path_include = ''
+    if 'search_path' in context.build_info:
+        search_path = pjoin(context.current_dir,
+                            context.build_info['search_path'])
+        search_path_include = cmake_dependency_search_path_template.format(
+                search_path=search_path
+            )
+
+    name = context.build_info['name']
+
+    target = '\n'.join([dependencies, search_path_include,
+        cmake_dependency_template.format(name=name, upper_name=name.upper())])
+
+    context.generateCMakeListsFile(target, "")
+    processed_targets = run_cmake(context.build_folder)
 
 
 def process_crabsys_build(context):
@@ -269,6 +299,7 @@ def run_cmake(directory=None):
     (retcode, stdout, stderr) = system_command(['cmake', '.'], directory)
 
     if retcode != 0:
+        print stderr
         return None
 
     current_project_name = None

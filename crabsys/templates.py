@@ -63,16 +63,14 @@ path_dependency_template = ''+\
 
 custom_dependency_template = ''+\
     'LIST(APPEND {name}_INCLUDE_DIRS {includes})\n'+\
-    'LIST(APPEND {name}_LINK_LIBS {libs})\n'+\
-    '_append_lib_info({prefix} {name})\n'
-    #'add_custom_target(__CRABSYS_DEP_CUSTOM_TARGET_{name})\n'+\
-    #'target_link_libraries(__CRABSYS_DEP_CUSTOM_TARGET_{name} {name}_LINK_LIBS)\n'+\
+    'LIST(APPEND {name}_LIBS_LINK_LIBS {libs})\n'+\
+    'export_lib_macro({name})\n'
 
 cmake_dependency_template = ''+\
     'find_package({name} REQUIRED)\n'+\
-    'LIST(APPEND __CRABSYS_CMAKE_DEP_{name}_INCLUDE_DIRS ${{{upper_name}_INCLUDE_DIR}})\n'+\
-    'LIST(APPEND __CRABSYS_CMAKE_DEP_{name}_LINK_LIBS ${{{upper_name}_LIBRARIES}})\n'+\
-    '_append_lib_info({prefix} __CRABSYS_CMAKE_DEP_{name})\n'
+    'LIST(APPEND {name}_INCLUDE_DIRS ${{{upper_name}_INCLUDE_DIR}})\n'+\
+    'LIST(APPEND {name}_LIBS_LINK_LIBS ${{{upper_name}_LIBRARIES}})\n'+\
+    'export_lib_macro({name})\n'
 
 cmake_dependency_search_path_template = ''+\
     'set(CMAKE_MODULE_PATH ${{CMAKE_MODULE_PATH}} "{search_path}")\n'

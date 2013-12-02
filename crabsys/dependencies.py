@@ -14,19 +14,16 @@ from templates import *
 ## Dependencies ##
 ##################
 def process_cmake_dependency(dependency_info, context):
-    name = dependency_info['cmake']
+    if 'name' not in dependency_info:
+        dependency_info['name'] = dependency_info['cmake']
 
-    search_path_include = ''
     if 'search_path' in dependency_info:
-        search_path = pjoin(context.current_dir,
-                            dependency_info['search_path'])
-        search_path_include = cmake_dependency_search_path_template.format(
-                search_path=search_path
-            )
+        dependency_info["search_path"] = pjoin(context.current_dir, dependency_info["search_path"])
 
-    return search_path_include + cmake_dependency_template.format(name=name,
-                                    upper_name=name.upper(),
-                                    prefix=context.current_target['name'])
+    dependency_info["path"] = pjoin(context.libs_dir, "cmake_dep_"+dependency_info['name'])
+    mkdir_p(dependency_info["path"])
+
+    return process_path_dependency(dependency_info, context)
 
 def process_repository_dependency(dependency_info, context):
     repo_url = dependency_info['repository']
@@ -94,31 +91,11 @@ def process_path_dependency(dependency_info, context):
 
     context.process(dependency_absolute_path, dependency_info, context)
 
-    if "type" in dependency_info:
-        dependency_type = dependency_info["type"]
-        if dependency_type == "custom":
-            return custom_dependency_template.format(
-                includes=add_path_prefix_and_join(dependency_info["include_dirs"],
-                                                  dependency_absolute_path,
-                                                  ' '),
-                libs=add_path_prefix_and_join(dependency_info["lib_files"],
-                                              dependency_absolute_path,
-                                              ' '),
-                prefix=context.current_target['name'],
-                name=dependency_info['name']
-            )
-        else:
-            return path_dependency_template.format(
-                build_path=dependency_build_folder_path,
-                prefix=context.current_target['name'],
-                name=dependency_info['name']
-            )
-    else:
-        return path_dependency_template.format(
-            build_path=dependency_build_folder_path,
-            prefix=context.current_target['name'],
-            name=dependency_info['name']
-        )
+    return path_dependency_template.format(
+        build_path=dependency_build_folder_path,
+        prefix=context.current_target['name'],
+        name=dependency_info['name']
+    )
 
 def process_dependency(dependency_info, context):
     if 'repository' in dependency_info:
