@@ -229,6 +229,9 @@ def process_custom_build(context):
     current_dir = context.current_dir
     build_info = context.build_info
 
+    context.current_target = context.build_info
+    dependencies = process_dependencies(context.build_info, context)
+
     if "build-steps" in build_info:
         for step in build_info["build-steps"]:
             command = [ step["command"] ]
@@ -254,7 +257,7 @@ def process_custom_build(context):
         includes=add_path_prefix_and_join(build_info["include_dirs"], current_dir, ' '),
         libs=add_path_prefix_and_join(build_info["lib_files"], current_dir, ' '))
 
-    context.generateCMakeListsFile(target, "")
+    context.generateCMakeListsFile(dependencies+'\n'+target, "")
     processed_targets = run_cmake(context.build_folder)
 
 

@@ -62,14 +62,14 @@ path_dependency_template = ''+\
     'include_lib_macro_internal({build_path} {prefix} {name})\n'
 
 custom_dependency_template = ''+\
-    'LIST(APPEND {name}_INCLUDE_DIRS {includes})\n'+\
-    'LIST(APPEND {name}_LIBS_LINK_LIBS {libs})\n'+\
+    'LIST(APPEND __CRABSYS_{name}_INCLUDE_DIRS {includes})\n'+\
+    'LIST(APPEND __CRABSYS_{name}_LIBS {libs})\n'+\
     'export_lib_macro({name})\n'
 
 cmake_dependency_template = ''+\
     'find_package({name} REQUIRED)\n'+\
-    'LIST(APPEND {name}_INCLUDE_DIRS ${{{upper_name}_INCLUDE_DIR}})\n'+\
-    'LIST(APPEND {name}_LIBS_LINK_LIBS ${{{upper_name}_LIBRARIES}})\n'+\
+    'LIST(APPEND __CRABSYS_{name}_INCLUDE_DIRS ${{{upper_name}_INCLUDE_DIR}})\n'+\
+    'LIST(APPEND __CRABSYS_{name}_LIBS ${{{upper_name}_LIBRARIES}})\n'+\
     'export_lib_macro({name})\n'
 
 cmake_dependency_search_path_template = ''+\
