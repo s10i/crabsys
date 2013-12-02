@@ -49,7 +49,12 @@ def process_repository_dependency(dependency_info, context):
     else:
         mkdir_p(os.path.abspath(libs_dir))
 
-        git_clone(repo_url, directory=libs_dir)        
+        git_clone(repo_url, directory=libs_dir)
+
+        if 'branch' in dependency_info:
+            git_checkout(dependency_info['branch'], directory=dependency_absolute_path)
+        elif 'commit' in dependency_info:
+            git_checkout(dependency_info['commit'], directory=dependency_absolute_path)
 
         return process_path_dependency({
             "path": pjoin(libraries_folder_relative_path, repo_name),

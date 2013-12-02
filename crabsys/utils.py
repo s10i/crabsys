@@ -85,6 +85,11 @@ def git_clone(url, directory=None):
     if retcode != 0:
         raise Exception('Error cloning repository: ' + url + '\n' + stderr)
 
+def git_checkout(branch_or_commit, directory=None):
+    (retcode, stdout, stderr) = git_command(params=['checkout', branch_or_commit], directory=directory)
+    if retcode != 0:
+        raise Exception('Error checkouting repository: ' + url + '\n' + stderr)
+
 def git_status(directory=None):
     (retcode, stdout, stderr) = git_command(params=['status'], directory=directory)
     if retcode != 0:
