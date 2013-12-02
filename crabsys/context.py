@@ -1,6 +1,7 @@
 
 import os
 import json
+import glob
 
 from os.path import join as pjoin
 from utils import get_file_content
@@ -98,8 +99,23 @@ class Context:
             pass
 
         if crab_file_path:
-            # Read crab file and parse as json
-            self.build_info = json.loads(get_file_content(crab_file_path))
+            if os.path.isfile(crab_file_path):
+                # Read crab file and parse as json
+                self.build_info = json.loads(get_file_content(crab_file_path))
+            else:
+                print "crab.json file not found - setting to default build"
+                self.build_info = {
+                    "targets": [
+                        {
+                            "name": "a.out",
+                            "type": "executable",
+                            "sources": glob.glob(pjoin(self.current_dir, "*.cpp"))+
+                                       glob.glob(pjoin(self.current_dir, "*.c"))+
+                                       glob.glob(pjoin(self.current_dir, "src", "*.cpp"))+
+                                       glob.glob(pjoin(self.current_dir, "src", "*.c"))
+                        }
+                    ]
+                }
         else:
             self.build_info = build_info
 
