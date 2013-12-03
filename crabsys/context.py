@@ -2,9 +2,11 @@
 import os
 import json
 import glob
+import copy
 
 from os.path import join as pjoin
 from utils import get_file_content
+from config import crabsys_config
 
 build_folder_relative_path = pjoin('build', '.build')
 targets_relative_path = 'build'
@@ -104,18 +106,7 @@ class Context:
                 self.build_info = json.loads(get_file_content(crab_file_path))
             else:
                 print "crab.json file not found - setting to default build"
-                self.build_info = {
-                    "targets": [
-                        {
-                            "name": "a.out",
-                            "type": "executable",
-                            "sources": glob.glob(pjoin(self.current_dir, "*.cpp"))+
-                                       glob.glob(pjoin(self.current_dir, "*.c"))+
-                                       glob.glob(pjoin(self.current_dir, "src", "*.cpp"))+
-                                       glob.glob(pjoin(self.current_dir, "src", "*.c"))
-                        }
-                    ]
-                }
+                self.build_info = copy.deepcopy(crabsys_config["default_build"])
         else:
             self.build_info = build_info
 

@@ -12,6 +12,7 @@ from context import Context, GlobalContext, build_folder_relative_path, targets_
 from utils import *
 from templates import *
 from dependencies import process_dependencies, process_target_dynamic_lib_dependecies
+from config import loadConfiguration
 
 
 #############################################################################
@@ -141,7 +142,8 @@ def process_sources(sources, context):
         if type(source)==type({}):
             if 'glob' in source:
                 glob_sources = glob.glob(pjoin(context.current_dir, source['glob']))
-                sources_list += '\n'.join(glob_sources)+'\n'
+                if len(glob_sources) > 0:
+                    sources_list += '\n'.join(glob_sources)+'\n'
         else:
             sources_list += pjoin(context.current_dir, source)+'\n'
 
@@ -172,12 +174,17 @@ def process_sources_lists(context):
     return definitions
 
 def process_target_sources(target_info, context):
-    if 'sources' not in target_info:
+    if 'sources' not in target_info or len(target_info['sources']) == 0:
+        return ''
+
+    processed_sources = process_sources(target_info['sources'], context)
+
+    if len(processed_sources) == 0:
         return ''
 
     return sources_template.format(
             name = target_info['name'],
-            sources = process_sources(target_info['sources'], context)
+            sources = processed_sources
         )
 
 def process_target_sources_lists(target_info, context):
@@ -335,6 +342,8 @@ def run_make():
     return subprocess.call(command, shell=True)
 
 def main():
+    loadConfiguration()
+
     if len(sys.argv) > 1:
         if sys.argv[1] == 'build':
             process(os.path.abspath('.'))
