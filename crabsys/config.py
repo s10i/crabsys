@@ -72,4 +72,4 @@ def loadConfiguration():
                 print 'err code:', errno.errorcode[e.errno]
                 print 'err message:', os.strerror(e.errno)
 
-    print crabsys_config
+    #print crabsys_config

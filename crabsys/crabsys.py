@@ -236,6 +236,8 @@ def process(current_dir, build_info=None, parent_context=None):
         process_custom_build(context)
     elif context.build_type == "cmake":
         process_cmake_build(context)
+    elif context.build_type == "autoconf":
+        process_autoconf_build(context)
     elif context.build_type == "crabsys":
         process_crabsys_build(context)
     else:
@@ -277,6 +279,38 @@ def process_custom_build(context):
 
     context.generateCMakeListsFile(dependencies+'\n'+target, "")
     processed_targets = run_cmake(context.build_folder)
+
+
+def process_autoconf_build(context):
+    build_info = context.build_info
+
+    build_info["build-steps"] = [
+        { "command": "./configure" },
+        { "command": "make" }
+    ]
+
+    configure_command = build_info["build-steps"][0]
+    make_command = build_info["build-steps"][1]
+
+    # Run directory
+    if "autoconf_directory" in build_info:
+        configure_command["directory"] = build_info["autoconf_directory"]
+        make_command["directory"] = build_info["autoconf_directory"]
+
+    if "configure_directory" in build_info:
+        configure_command["directory"] = build_info["configure_directory"]
+
+    if "make_directory" in build_info:
+        make_command["directory"] = build_info["make_directory"]
+
+    # Commands parameters
+    if "configure_params" in build_info:
+        configure_command["params"] = build_info["configure_params"]
+
+    if "make_params" in build_info:
+        make_command["params"] = build_info["make_params"]
+
+    process_custom_build(context)
 
 
 def process_cmake_build(context):
