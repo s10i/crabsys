@@ -5,6 +5,7 @@ import os.path
 import sys
 import subprocess
 import multiprocessing
+import glob
 
 from os.path import join as pjoin
 from context import Context, GlobalContext, build_folder_relative_path, targets_relative_path
@@ -134,10 +135,17 @@ def process_targets(context):
 ## Sources ##
 #############
 def process_sources(sources, context):
-    return '\n'.join(
-        [pjoin(context.current_dir, source)
-         for source in sources]
-    )
+    sources_list = ''
+
+    for source in sources:
+        if type(source)==type({}):
+            if 'glob' in source:
+                glob_sources = glob.glob(pjoin(context.current_dir, source['glob']))
+                sources_list += '\n'.join(glob_sources)+'\n'
+        else:
+            sources_list += pjoin(context.current_dir, source)+'\n'
+
+    return sources_list
 
 def process_sources_list(sources_list, context):
     definition = ''
