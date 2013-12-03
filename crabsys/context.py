@@ -71,7 +71,8 @@ class Context:
             self.processCrabFile(build_info)
 
         if 'project_name' not in self.build_info:
-            print current_dir + ': project name not defined, using folder name'
+            if self.build_type == "crabsys":
+                print current_dir + ': project name not defined, using folder name'
             self.build_info['project_name'] =\
                 os.path.basename(os.path.dirname(current_dir+os.sep))
 
@@ -89,21 +90,21 @@ class Context:
             self.parent_context.addChildContext(self)
 
     def processCrabFile(self, build_info):
-        crab_file_path = pjoin(self.current_dir, 'crab.json')
+        self.crab_file_path = pjoin(self.current_dir, 'crab.json')
 
         try:
             cmake_file_last_modification = os.stat(self.cmake_lists_file_path).st_mtime
-            crab_file_last_modification = os.stat(crab_file_path).st_mtime
+            crab_file_last_modification = os.stat(self.crab_file_path).st_mtime
 
             #if crab_file_last_modification < cmake_file_last_modification:
             #    return
         except OSError, e:
             pass
 
-        if crab_file_path:
-            if os.path.isfile(crab_file_path):
+        if self.crab_file_path:
+            if os.path.isfile(self.crab_file_path):
                 # Read crab file and parse as json
-                self.build_info = json.loads(get_file_content(crab_file_path))
+                self.build_info = json.loads(get_file_content(self.crab_file_path))
             else:
                 print "crab.json file not found - setting to default build"
                 self.build_info = copy.deepcopy(crabsys_config["default_build"])
@@ -142,3 +143,12 @@ class Context:
         cmake_file = open(self.cmake_lists_file_path, 'w')
         cmake_file.write(cmake_file_content)
         cmake_file.close()
+
+    def getOriginalCrabFilePath(self):
+        if self.build_type == "crabsys" and os.path.isfile(self.crab_file_path):
+            return os.path.abspath(self.crab_file_path)
+        elif self.parent_context:
+            return self.parent_context.getOriginalCrabFilePath()
+        else:
+            print "Warning: No crab file found! This shouldn't happen!"
+            return None

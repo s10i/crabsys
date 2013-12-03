@@ -249,6 +249,20 @@ def process_custom_build(context):
     current_dir = context.current_dir
     build_info = context.build_info
 
+    if "target_files" not in build_info:
+        build_info["target_files"] = []
+
+    should_build = False
+    for target_file in build_info["target_files"]:
+        file_last_modification = os.stat(pjoin(current_dir, target_file)).st_mtime
+        crab_file_last_modification = os.stat(context.getOriginalCrabFilePath()).st_mtime
+
+        if crab_file_last_modification > file_last_modification:
+            should_build = True
+
+    if not should_build:
+        return
+
     context.current_target = context.build_info
     dependencies = process_dependencies(context.build_info, context)
     process_dependencies(context.build_info, context, attribute_name="build_dependencies")
@@ -268,15 +282,15 @@ def process_custom_build(context):
                 print "Command returned non-zero code: %s" % (step["command"])
                 print stderr
 
-    if "lib_files" in build_info:
-        for lib in build_info["lib_files"]:
-            if is_dynamic_lib(lib):
-                context.addDynamicLib(lib)
+    for lib in build_info["target_files"]:
+        if is_dynamic_lib(lib):
+            context.addDynamicLib(lib)
+        
 
     target = custom_dependency_template.format(
         name=context.build_info['name'],
-        includes=add_path_prefix_and_join(build_info["include_dirs"], current_dir, ' '),
-        libs=add_path_prefix_and_join(build_info["lib_files"], current_dir, ' '))
+        includes=add_path_prefix_and_join(build_info["includes"], current_dir, ' '),
+        libs=add_path_prefix_and_join(build_info["target_files"], current_dir, ' '))
 
     context.generateCMakeListsFile(dependencies+'\n'+target, "")
     processed_targets = run_cmake(context.build_folder)
