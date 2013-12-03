@@ -233,6 +233,8 @@ def process(current_dir, build_info=None, parent_context=None):
     if context.already_processed:
         return
 
+    print "Processing # %s #" % (context.build_info["project_name"])
+
     if context.build_type == "custom":
         process_custom_build(context)
     elif context.build_type == "cmake":
@@ -282,9 +284,11 @@ def process_custom_build(context):
                 print "Command returned non-zero code: %s" % (step["command"])
                 print stderr
 
-    for lib in build_info["target_files"]:
-        if is_dynamic_lib(lib):
-            context.addDynamicLib(lib)
+    for target_file in build_info["target_files"]:
+        if is_dynamic_lib(target_file):
+            context.addDynamicLib(target_file)
+
+        os.utime(pjoin(current_dir, target_file), None)
         
 
     target = custom_dependency_template.format(
@@ -293,6 +297,7 @@ def process_custom_build(context):
         libs=add_path_prefix_and_join(build_info["target_files"], current_dir, ' '))
 
     context.generateCMakeListsFile(dependencies+'\n'+target, "")
+
     processed_targets = run_cmake(context.build_folder)
 
 
