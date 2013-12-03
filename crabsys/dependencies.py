@@ -9,6 +9,7 @@ from os.path import join as pjoin
 from context import build_folder_relative_path, targets_relative_path, libraries_folder_relative_path
 from utils import *
 from templates import *
+from config import crabsys_config
 
 #############################################################################
 ## Dependencies ##
@@ -37,7 +38,8 @@ def process_repository_dependency(dependency_info, context):
     if os.path.exists(dependency_absolute_path):
         if os.path.isdir(dependency_absolute_path):
             git_status(directory=dependency_absolute_path)
-            git_pull(directory=dependency_absolute_path)
+            if crabsys_config["update_dependencies"]:
+                git_pull(directory=dependency_absolute_path)
 
             return process_path_dependency({
                 "path": pjoin(libraries_folder_relative_path, repo_name),

@@ -14,6 +14,7 @@ config_files_locations = [
 ]
 
 crabsys_config = {
+    "update_dependencies": False,
     "compile_flags": "-Wall",
     "link_flags": "",
     "includes": [
@@ -61,15 +62,19 @@ def mergeConfig(config):
     mergeDictionary(crabsys_config, config)
 
 
-def loadConfiguration():
-    for path in config_files_locations:
+def loadConfiguration(config_file_path=None, config=None):
+    for path in config_files_locations+[config_file_path]:
         try:
-            mergeConfig(json.load(open(path)))
+            if path:
+                mergeConfig(json.load(open(path)))
         except IOError as e:
             if e.errno != 2:
                 print "Warning: error opening config file: %s" % (path)
                 print 'errno:', e.errno
                 print 'err code:', errno.errorcode[e.errno]
                 print 'err message:', os.strerror(e.errno)
+
+    if config:
+        mergeConfig(config)
 
     #print crabsys_config

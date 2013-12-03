@@ -6,6 +6,7 @@ import sys
 import subprocess
 import multiprocessing
 import glob
+import argparse
 
 from os.path import join as pjoin
 from context import Context, GlobalContext, build_folder_relative_path, targets_relative_path
@@ -370,20 +371,52 @@ def run_cmake(directory=None):
 
     return targets
 
-def run_make():
+def run_make(directory=None, parallel_build=True):
     cpu_count = multiprocessing.cpu_count()
-    command = 'make -C ' + build_folder_relative_path + ' -j' + str(cpu_count)
-    return subprocess.call(command, shell=True)
+    if not parallel_build:
+        cpu_count = 1
+
+    (retcode, stdout, stderr) = system_command( ['make', '-j' + str(cpu_count)], pjoin(directory, build_folder_relative_path) )
+
+    if retcode != 0:
+        print "Error running make at directory: %s" % (directory)
+        print stderr
+
+    return retcode
+
+def parseArguments():
+    parser = argparse.ArgumentParser(description='C/C++ Recursive Automated Build System')
+    parser.add_argument('--update-dependencies', action='store_true', dest='update_dependencies', default=None,
+                        help='Update all repository dependencies before building')
+    parser.add_argument('--dont-update-dependencies', action='store_false', dest='update_dependencies', default=None,
+                        help='DO NOT update any repository dependencies before building')
+    parser.add_argument('--config', metavar='CONFIG', action='store', dest='config_file_path',
+                        help='Configuration file path')
+    parser.add_argument('--path', metavar='PATH', action='store', dest='path', default='.',
+                        help='Path of where the processing should start')
+    parser.add_argument('action', default='build', nargs='?',
+                        help='Crabsys action (only build is supported for now)')
+
+    args = parser.parse_args()
+
+    #print args
+
+    return args
 
 def main():
-    loadConfiguration()
+    args = parseArguments()
 
-    if len(sys.argv) > 1:
-        if sys.argv[1] == 'build':
-            process(os.path.abspath('.'))
-            return_code_make = run_make()
+    args_config = {}
+    if args.update_dependencies:
+        args_config["update_dependencies"] = args.update_dependencies
+
+    loadConfiguration(args.config_file_path, args_config)
+
+    if args.action == 'build':
+        process(os.path.abspath(args.path))
+        run_make(os.path.abspath(args.path))
     else:
-        print "Watchoowameedo?"
+        print "Action not supported: %s" % (args.action)
 #############################################################################
 
 
