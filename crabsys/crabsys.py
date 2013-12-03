@@ -233,7 +233,7 @@ def process(current_dir, build_info=None, parent_context=None):
     if context.already_processed:
         return
 
-    print "Processing # %s #" % (context.build_info["project_name"])
+    print ("--"*context.level) + "-> Processing # %s #" % (context.build_info["project_name"])
 
     if context.build_type == "custom":
         process_custom_build(context)
@@ -246,6 +246,7 @@ def process(current_dir, build_info=None, parent_context=None):
     else:
         print "Unknown build type: %s\nSkipping %s..." % (context.build_type, context.project_name)
 
+    print ("--"*context.level) + "-> Done"
 
 def process_custom_build(context):
     current_dir = context.current_dir
@@ -256,10 +257,15 @@ def process_custom_build(context):
 
     should_build = False
     for target_file in build_info["target_files"]:
-        file_last_modification = os.stat(pjoin(current_dir, target_file)).st_mtime
-        crab_file_last_modification = os.stat(context.getOriginalCrabFilePath()).st_mtime
+        target_file_path = pjoin(current_dir, target_file)
 
-        if crab_file_last_modification > file_last_modification:
+        if os.path.isfile(target_file_path):
+            file_last_modification = os.stat(target_file_path).st_mtime
+            crab_file_last_modification = os.stat(context.getOriginalCrabFilePath()).st_mtime
+
+            if crab_file_last_modification > file_last_modification:
+                should_build = True
+        else:
             should_build = True
 
     if not should_build:

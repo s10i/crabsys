@@ -53,6 +53,10 @@ class Context:
         self.current_target = None
         self.dynamic_libs = []
 
+        self.level = 0
+        if self.parent_context:
+            self.level = parent_context.level+1
+
         self.build_info = build_info
         if self.build_info is None:
             self.build_info = {}
