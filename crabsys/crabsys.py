@@ -16,6 +16,24 @@ from dependencies import process_dependencies, process_target_dynamic_lib_depend
 from config import loadConfiguration
 
 
+def process_list_of_commands(info, attribute_name, current_dir):
+    if attribute_name in info:
+        for step in info[attribute_name]:
+            command = [ step["command"] ]
+            if "params" in step:
+                command += step["params"]
+
+            directory = current_dir
+            if "directory" in step:
+                directory = pjoin(current_dir, step["directory"])
+
+            (retcode, stdout, stderr) = system_command(command, directory)
+            if retcode != 0:
+                print "Command returned non-zero code: %s" % (step["command"])
+                print stderr
+
+
+
 #############################################################################
 ## Executables ##
 #################
@@ -106,6 +124,8 @@ def process_target(target_info, context):
     dependencies = process_dependencies(target_info, context)
     process_dependencies(target_info, context, attribute_name="build_dependencies")
 
+    process_list_of_commands(target_info, "pre-build-steps", context.current_dir)
+
     sources = process_target_sources(target_info, context)
     context.sources_lists = process_target_sources_lists(target_info, context)
     includes = process_target_includes(target_info, context)
@@ -128,6 +148,13 @@ def process_targets(context):
     if 'targets' in context.build_info:
         for target in context.build_info['targets']:
             targets_definitions += process_target(target, context)
+    return targets_definitions
+
+def process_targets_post_build_steps(context):
+    targets_definitions = ''
+    if 'targets' in context.build_info:
+        for target in context.build_info['targets']:
+            process_list_of_commands(target, "post-build-steps", context.current_dir)
     return targets_definitions
 #############################################################################
 
@@ -252,43 +279,35 @@ def process_custom_build(context):
     current_dir = context.current_dir
     build_info = context.build_info
 
-    if "target_files" not in build_info:
+    if "target_files" in build_info:
+        should_build = False
+        for target_file in build_info["target_files"]:
+            target_file_path = pjoin(current_dir, target_file)
+
+            if os.path.isfile(target_file_path):
+                file_last_modification = os.stat(target_file_path).st_mtime
+                crab_file_last_modification = os.stat(context.getOriginalCrabFilePath()).st_mtime
+
+                if crab_file_last_modification > file_last_modification:
+                    should_build = True
+            else:
+                should_build = True
+
+        if not should_build:
+            return
+    else:
         build_info["target_files"] = []
 
-    should_build = False
-    for target_file in build_info["target_files"]:
-        target_file_path = pjoin(current_dir, target_file)
-
-        if os.path.isfile(target_file_path):
-            file_last_modification = os.stat(target_file_path).st_mtime
-            crab_file_last_modification = os.stat(context.getOriginalCrabFilePath()).st_mtime
-
-            if crab_file_last_modification > file_last_modification:
-                should_build = True
-        else:
-            should_build = True
-
-    if not should_build:
-        return
+    if "includes" not in build_info:
+        build_info["includes"] = []
 
     context.current_target = context.build_info
     dependencies = process_dependencies(context.build_info, context)
     process_dependencies(context.build_info, context, attribute_name="build_dependencies")
 
-    if "build-steps" in build_info:
-        for step in build_info["build-steps"]:
-            command = [ step["command"] ]
-            if "params" in step:
-                command += step["params"]
-
-            directory = current_dir
-            if "directory" in step:
-                directory = pjoin(current_dir, step["directory"])
-
-            (retcode, stdout, stderr) = system_command(command, directory)
-            if retcode != 0:
-                print "Command returned non-zero code: %s" % (step["command"])
-                print stderr
+    process_list_of_commands(build_info, "pre-build-steps", current_dir)
+    process_list_of_commands(build_info, "build-steps", current_dir)
+    process_list_of_commands(build_info, "post-build-steps", current_dir)
 
     for target_file in build_info["target_files"]:
         if is_dynamic_lib(target_file):
@@ -360,6 +379,9 @@ def process_cmake_build(context):
     context.generateCMakeListsFile(target, "")
     processed_targets = run_cmake(context.build_folder)
 
+    process_list_of_commands(context.build_info, "pre-build-steps", context.current_dir)
+    process_list_of_commands(context.build_info, "post-build-steps", context.current_dir)
+
 
 def process_crabsys_build(context):
     sources_lists = process_sources_lists(context)
@@ -372,6 +394,10 @@ def process_crabsys_build(context):
     for target in processed_targets:
         if is_dynamic_lib(processed_targets[target]["location"]):
             context.addDynamicLib(lib)
+
+    run_make(context.build_folder)
+
+    process_targets_post_build_steps(context)
 #############################################################################
 
 
@@ -401,7 +427,7 @@ def run_make(directory=None, parallel_build=True):
     if not parallel_build:
         cpu_count = 1
 
-    (retcode, stdout, stderr) = system_command( ['make', '-j' + str(cpu_count)], pjoin(directory, build_folder_relative_path) )
+    (retcode, stdout, stderr) = system_command( ['make', '-j' + str(cpu_count)], directory )
 
     if retcode != 0:
         print "Error running make at directory: %s" % (directory)
@@ -439,7 +465,6 @@ def main():
 
     if args.action == 'build':
         process(os.path.abspath(args.path))
-        run_make(os.path.abspath(args.path))
     else:
         print "Action not supported: %s" % (args.action)
 #############################################################################
