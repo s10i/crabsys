@@ -1,0 +1,73 @@
+#
+# Copyright 2013, S10I
+# All rights reserved.
+#
+# Created by Felipe Machado (felipou)
+#
+#
+# Magical CRABSys Makefile
+#
+# Checks for crabsys (optionally installing it (and checking
+# for python and pip for that (no, I'm not a LISP programmer
+# (but I think nested parenthesis have their uses))))
+# and builds by issuing 'crab build'
+#
+# Just put it in your project and let it be. :)
+#
+#
+# See:
+# https://github.com/s10i/crabsys.git
+#
+#
+# This file only is licensed under the BSD 3-clause License.
+# http://opensource.org/licenses/BSD-3-Clause 
+#
+# CRABSys is GPL
+#
+
+
+SHELL := /bin/bash
+
+all: crabsys
+	@echo 'CRAB Building!'
+	crab build
+
+
+# Checks if crabsys is installed
+crabsys:
+	@echo -n 'Checking for crabsys... '
+	@hash crab 2>/dev/null; \
+	if [ $$? == 0 ]; then \
+		echo "found!"; \
+	else \
+		echo "not found!"; \
+		$(MAKE) install_crabsys; \
+	fi;
+
+
+# Asks if the user wants to install crabsys
+install_crabsys:
+	@read -p "Want us to try to install CRABSys? " yn; \
+    if [ $$yn == 'yes' ]; then \
+		$(MAKE) do_install_crabsys; \
+	else \
+		exit 1; \
+	fi;
+
+
+# Installs crabsys with PIP
+do_install_crabsys: python
+	sudo pip install git+https://github.com/s10i/crabsys.git
+
+
+# Checks if python exists and if is version 2.7.x (the only version we tested CRABSys with)
+python:
+	@echo -n 'Checking for python... '
+	@hash python 2>/dev/null || (echo >&2 "Python not found. PYTHON! What kind of system are you using??"; exit 1;)
+	@echo "found!"
+
+	@echo -n 'Checking for pip... '
+	@hash python 2>/dev/null || (echo >&2 "pip not found. This installer works by installing via pip."; exit 1;)
+	@echo "found!"
+
+	@python -c "import sys; exit(sys.version_info.major!=2 or sys.version_info.minor!=7)" || (echo >&2 "Sorry, crabsys only supports python 2.7 for now. Sorry :("; exit 1;)
