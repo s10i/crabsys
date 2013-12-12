@@ -7,6 +7,7 @@ import subprocess
 import multiprocessing
 import glob
 import argparse
+import time
 
 from os.path import join as pjoin
 from context import Context, GlobalContext, build_folder_relative_path, targets_relative_path
@@ -19,18 +20,43 @@ from config import loadConfiguration
 def process_list_of_commands(info, attribute_name, current_dir):
     if attribute_name in info:
         for step in info[attribute_name]:
-            command = [ step["command"] ]
-            if "params" in step:
-                command += step["params"]
+            if "command" in step:
+                command = [ step["command"] ]
+                if "params" in step:
+                    command += step["params"]
 
-            directory = current_dir
-            if "directory" in step:
-                directory = pjoin(current_dir, step["directory"])
+                directory = current_dir
+                if "directory" in step:
+                    directory = pjoin(current_dir, step["directory"])
 
-            (retcode, stdout, stderr) = system_command(command, directory)
-            if retcode != 0:
-                print "Command returned non-zero code: %s" % (step["command"])
-                print stderr
+                (retcode, stdout, stderr) = system_command(command, directory)
+                if retcode != 0:
+                    print "Command returned non-zero code: %s" % (step["command"])
+                    print stderr
+            elif "commands" in step:
+                targets_modification_time = 0
+                dependencies_modification_time = 1
+
+                if "targets" in step:
+                    for path in step["targets"]:
+                        full_path = pjoin(current_dir, path)
+
+                        if os.path.isfile(full_path):
+                            modification_time = os.stat( full_path ).st_mtime
+                            if modification_time < targets_modification_time or targets_modification_time == 0:
+                                targets_modification_time = modification_time
+                        else:
+                            targets_modification_time = 0
+                            break
+
+                if "dependencies" in step:
+                    for path in step["dependencies"]:
+                        modification_time = os.stat( pjoin(current_dir, path) ).st_mtime
+                        if modification_time > dependencies_modification_time or dependencies_modification_time == 1:
+                            dependencies_modification_time = modification_time
+
+                if dependencies_modification_time > targets_modification_time:
+                    process_list_of_commands(step, "commands", current_dir)
 
 
 
@@ -254,7 +280,9 @@ def process_target_includes(target_info, context):
 
 
 #############################################################################
-def process(current_dir, build_info=None, parent_context=None):
+def process(current_dir, build_info=None, parent_context=None, build=False):
+    start_time = time.time()
+
     context = Context(build_info, current_dir, parent_context, process)
 
     if context.already_processed:
@@ -263,19 +291,19 @@ def process(current_dir, build_info=None, parent_context=None):
     print ("--"*context.level) + "-> Processing # %s #" % (context.build_info["project_name"])
 
     if context.build_type == "custom":
-        process_custom_build(context)
+        process_custom_build(context, build)
     elif context.build_type == "cmake":
-        process_cmake_build(context)
+        process_cmake_build(context, build)
     elif context.build_type == "autoconf":
-        process_autoconf_build(context)
+        process_autoconf_build(context, build)
     elif context.build_type == "crabsys":
-        process_crabsys_build(context)
+        process_crabsys_build(context, build)
     else:
         print "Unknown build type: %s\nSkipping %s..." % (context.build_type, context.project_name)
 
-    print ("--"*context.level) + "-> Done"
+    print ("--"*context.level) + "-> Done - %f seconds" % (time.time()-start_time)
 
-def process_custom_build(context):
+def process_custom_build(context, build=False):
     current_dir = context.current_dir
     build_info = context.build_info
 
@@ -323,10 +351,11 @@ def process_custom_build(context):
 
     context.generateCMakeListsFile(dependencies+'\n'+target, "")
 
-    processed_targets = run_cmake(context.build_folder)
+    if build:
+        processed_targets = run_cmake(context.build_folder)
 
 
-def process_autoconf_build(context):
+def process_autoconf_build(context, build=False):
     build_info = context.build_info
 
     build_info["build-steps"] = [
@@ -355,10 +384,10 @@ def process_autoconf_build(context):
     if "make_params" in build_info:
         make_command["params"] = build_info["make_params"]
 
-    process_custom_build(context)
+    process_custom_build(context, build)
 
 
-def process_cmake_build(context):
+def process_cmake_build(context, build=False):
     context.current_target = context.build_info
     dependencies = process_dependencies(context.build_info, context)
     process_dependencies(context.build_info, context, attribute_name="build_dependencies")
@@ -377,27 +406,31 @@ def process_cmake_build(context):
         cmake_dependency_template.format(name=name, upper_name=name.upper())])
 
     context.generateCMakeListsFile(target, "")
-    processed_targets = run_cmake(context.build_folder)
+
+    if build:
+        processed_targets = run_cmake(context.build_folder)
 
     process_list_of_commands(context.build_info, "pre-build-steps", context.current_dir)
     process_list_of_commands(context.build_info, "post-build-steps", context.current_dir)
 
 
-def process_crabsys_build(context):
+def process_crabsys_build(context, build=False):
     sources_lists = process_sources_lists(context)
+
     targets = process_targets(context)
 
     context.generateCMakeListsFile(targets, sources_lists)
 
-    processed_targets = run_cmake(context.build_folder)
+    if build:
+        processed_targets = run_cmake(context.build_folder)
 
-    for target in processed_targets:
-        if is_dynamic_lib(processed_targets[target]["location"]):
-            context.addDynamicLib(lib)
+        for target in processed_targets:
+            if is_dynamic_lib(processed_targets[target]["location"]):
+                context.addDynamicLib(lib)
 
-    run_make(context.build_folder)
+        run_make(context.build_folder)
 
-    process_targets_post_build_steps(context)
+        process_targets_post_build_steps(context)
 #############################################################################
 
 
@@ -464,7 +497,7 @@ def main():
     loadConfiguration(args.config_file_path, args_config)
 
     if args.action == 'build':
-        process(os.path.abspath(args.path))
+        process(os.path.abspath(args.path), build=True)
     else:
         print "Action not supported: %s" % (args.action)
 #############################################################################

@@ -139,6 +139,12 @@ class Context:
                 sources_lists=sources_lists
             )
 
+        if os.path.isfile(self.cmake_lists_file_path):
+            if get_file_content(self.cmake_lists_file_path) == cmake_file_content:
+                return
+            if os.stat(self.cmake_lists_file_path).st_mtime > os.stat(self.getOriginalCrabFilePath()).st_mtime:
+                return
+
         # Make sure the 'build' folder exists
         if not os.path.exists(self.build_folder):
             os.makedirs(self.build_folder)
