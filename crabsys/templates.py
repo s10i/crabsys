@@ -1,8 +1,5 @@
 
-cmake_output_variables = {
-    "name": "__crabsys_target_name=",
-    "location": "__crabsys_target_location="
-}
+from utils import cmake_output_variables
 
 #############################################################################
 ## Templates ##

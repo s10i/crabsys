@@ -5,6 +5,7 @@ import tarfile
 import errno
 import os.path
 import re
+import multiprocessing
 
 from sys import stderr
 from os.path import join as pjoin
@@ -102,3 +103,42 @@ def git_pull(directory=None):
 
 def is_dynamic_lib(path):
     return re.match("^(.*)\.dylib", path) or re.match("^(.*)\.so(\.[0-9]*)?", path)
+
+
+cmake_output_variables = {
+    "name": "__crabsys_target_name=",
+    "location": "__crabsys_target_location="
+}
+
+def run_cmake(directory=None):
+    (retcode, stdout, stderr) = system_command(['cmake', '.'], directory)
+
+    if retcode != 0:
+        print stderr
+        return None
+
+    current_project_name = None
+    targets = {}
+    for line in stderr.split('\n'):
+        if line.startswith(cmake_output_variables['name']):
+            current_project_name = line[len(cmake_output_variables['name']):]
+            targets[current_project_name] = {}
+        elif line.startswith(cmake_output_variables['location']):
+            current_project_location = line[len(cmake_output_variables['location']):]
+            targets[current_project_name]['location'] = current_project_location
+
+    return targets
+
+def run_make(directory=None, parallel_build=True):
+    cpu_count = multiprocessing.cpu_count()
+    if not parallel_build:
+        cpu_count = 1
+
+    (retcode, stdout, stderr) = system_command( ['make', '-j' + str(cpu_count)], directory )
+
+    if retcode != 0:
+        print "Error running make at directory: %s" % (directory)
+        print stderr
+
+    return retcode
+
