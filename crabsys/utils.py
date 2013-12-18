@@ -107,7 +107,8 @@ def is_dynamic_lib(path):
 
 cmake_output_variables = {
     "name": "__crabsys_target_name=",
-    "location": "__crabsys_target_location="
+    "location": "__crabsys_target_location=",
+    "includes": "__crabsys_target_includes="
 }
 
 def run_cmake(directory=None):
@@ -123,9 +124,11 @@ def run_cmake(directory=None):
         if line.startswith(cmake_output_variables['name']):
             current_project_name = line[len(cmake_output_variables['name']):]
             targets[current_project_name] = {}
-        elif line.startswith(cmake_output_variables['location']):
-            current_project_location = line[len(cmake_output_variables['location']):]
-            targets[current_project_name]['location'] = current_project_location
+        else:
+            for (key,variable) in cmake_output_variables.iteritems():
+                if line.startswith(variable):
+                    value = line[len(variable):]
+                    targets[current_project_name][key] = value
 
     return targets
 

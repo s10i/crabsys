@@ -37,7 +37,7 @@ def main():
     loadConfiguration(args.config_file_path, args_config)
 
     if args.action == 'build':
-        Context(None, os.path.abspath(args.path), None).process(build=True)
+        Context(None, os.path.abspath(args.path), None).process()
     else:
         print "Action not supported: %s" % (args.action)
 #############################################################################

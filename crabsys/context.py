@@ -119,13 +119,7 @@ def process_path_dependency(dependency_info, context):
     dependency_build_folder_path = pjoin(dependency_absolute_path,
         context.build_folder_relative_path)
 
-    Context(dependency_info, dependency_absolute_path, context).process(build=False)
-
-    return path_dependency_template.format(
-        build_path=dependency_build_folder_path,
-        prefix=context.current_target['name'],
-        name=dependency_info['name']
-    )
+    return Context(dependency_info, dependency_absolute_path, context).process()
 
 def process_dependency(dependency_info, context):
     if 'repository' in dependency_info:
@@ -309,7 +303,7 @@ def process_target(target_info, context):
 
     process_system_specific(target_info, context)
 
-    dependencies = process_dependencies(target_info, context)
+    context.processed_dependencies = process_dependencies(target_info, context)
     process_dependencies(target_info, context, attribute_name="build_dependencies")
 
     process_list_of_commands(target_info, "pre-build-steps", context.current_dir)
@@ -329,7 +323,7 @@ def process_target(target_info, context):
 
     target += process_target_dynamic_lib_dependecies(target_info, context)
 
-    return '\n'.join([dependencies, includes, sources, target])
+    return '\n'.join([context.processed_dependencies, includes, sources, target])
 
 def process_targets(context):
     targets_definitions = ''
@@ -423,6 +417,8 @@ def process_target_sources_lists(target_info, context):
 def process_includes(includes, context):
     current_target_name = context.current_target['name']
 
+    context.includes += includes
+
     return '\n'.join(
         [pjoin(context.current_dir, include_dir)
          for include_dir in includes]
@@ -456,7 +452,7 @@ class GlobalContext:
             return False
 
 
-class ContextTarget:
+class Target:
     def __init__(self, target_info):
         pass
 
@@ -517,21 +513,20 @@ class Context:
         if self.parent_context:
             self.parent_context.addChildContext(self)
 
-    def process(self, build=False):
+    def process(self):
         if not self.already_processed:
             start_time = time.time()
 
             print ("--"*self.level) + "-> Processing # %s #" % (self.build_info["project_name"])
 
             if self.build_type == "custom":
-                self.process_custom_build(build)
+                self.processed_output = self.process_custom_build()
             elif self.build_type == "cmake":
-                self.process_cmake_build(build)
+                self.processed_output = self.process_cmake_build()
             elif self.build_type == "autoconf":
-                self.process_autoconf_build(build)
+                self.processed_output = self.process_autoconf_build()
             elif self.build_type == "crabsys":
-                print "crabsys build %d" % build
-                self.process_crabsys_build(build)
+                self.processed_output = self.process_crabsys_build()
             else:
                 print "Unknown build type: %s\nSkipping %s..." % (self.build_type, self.project_name)
 
@@ -539,10 +534,20 @@ class Context:
 
             print ("--"*self.level) + "-> Done - %f seconds" % (time.time()-start_time)
 
+            return self.processed_output
 
-    def process_custom_build(self, build=False):
+        return ""
+
+    def process_custom_build(self):
         current_dir = self.current_dir
         build_info = self.build_info
+
+        if "includes" not in build_info:
+            build_info["includes"] = []
+
+        self.current_target = self.build_info
+        self.processed_dependencies = process_dependencies(self.build_info, self)
+        process_dependencies(self.build_info, self, attribute_name="build_dependencies")
 
         if "target_files" in build_info:
             should_build = False
@@ -559,40 +564,39 @@ class Context:
                     should_build = True
 
             if not should_build:
-                return
+                return target_dependency_template.format(
+                    includes=add_path_prefix_and_join(build_info["includes"], current_dir, ' '),
+                    libs=add_path_prefix_and_join(build_info["target_files"], current_dir, ' ')
+                )+'\n'+self.processed_dependencies
         else:
             build_info["target_files"] = []
 
-        if "includes" not in build_info:
-            build_info["includes"] = []
-
-        self.current_target = self.build_info
-        dependencies = process_dependencies(self.build_info, self)
-        process_dependencies(self.build_info, self, attribute_name="build_dependencies")
-
         process_list_of_commands(build_info, "pre-build-steps", current_dir)
         process_list_of_commands(build_info, "build-steps", current_dir)
-        process_list_of_commands(build_info, "post-build-steps", current_dir)
 
         for target_file in build_info["target_files"]:
             if is_dynamic_lib(target_file):
                 self.addDynamicLib(target_file)
 
             os.utime(pjoin(current_dir, target_file), None)
-            
 
         target = custom_dependency_template.format(
             name=self.build_info['name'],
             includes=add_path_prefix_and_join(build_info["includes"], current_dir, ' '),
             libs=add_path_prefix_and_join(build_info["target_files"], current_dir, ' '))
 
-        self.generateCMakeListsFile(dependencies+'\n'+target, "")
+        self.generateCMakeListsFile(self.processed_dependencies+'\n'+target, "")
 
-        if build:
-            processed_targets = run_cmake(self.build_folder)
+        processed_targets = run_cmake(self.build_folder)
+        process_list_of_commands(build_info, "post-build-steps", current_dir)
+
+        return target_dependency_template.format(
+                includes=add_path_prefix_and_join(build_info["includes"], current_dir, ' '),
+                libs=add_path_prefix_and_join(build_info["target_files"], current_dir, ' ')
+            )+'\n'+self.processed_dependencies
 
 
-    def process_autoconf_build(self, build=False):
+    def process_autoconf_build(self):
         build_info = self.build_info
 
         build_info["build-steps"] = [
@@ -621,13 +625,13 @@ class Context:
         if "make_params" in build_info:
             make_command["params"] = build_info["make_params"]
 
-        self.process_custom_build(build)
+        return self.process_custom_build()
 
 
-    def process_cmake_build(self, build=False):
+    def process_cmake_build(self):
         self.current_target = self.build_info
         dependencies = process_dependencies(self.build_info, self)
-        process_dependencies(self.build_info, self, attribute_name="build_dependencies")
+        self.processed_dependencies = process_dependencies(self.build_info, self, attribute_name="build_dependencies")
 
         search_path_include = ''
         if 'search_path' in self.build_info:
@@ -644,31 +648,50 @@ class Context:
 
         self.generateCMakeListsFile(target, "")
 
-        if build:
-            processed_targets = run_cmake(self.build_folder)
+        processed_targets = run_cmake(self.build_folder)
 
         process_list_of_commands(self.build_info, "pre-build-steps", self.current_dir)
         process_list_of_commands(self.build_info, "post-build-steps", self.current_dir)
 
+        self.includes = []
 
-    def process_crabsys_build(self, build=False):
+        return self.targets_as_dependencies(processed_targets)
+
+
+    def process_crabsys_build(self):
         sources_lists = process_sources_lists(self)
+        self.includes = []
 
         targets = process_targets(self)
 
         self.generateCMakeListsFile(targets, sources_lists)
 
-        if build:
-            processed_targets = run_cmake(self.build_folder)
+        processed_targets = run_cmake(self.build_folder)
 
-            for target in processed_targets:
-                if is_dynamic_lib(processed_targets[target]["location"]):
-                    self.addDynamicLib(lib)
+        for target in processed_targets:
+            if is_dynamic_lib(processed_targets[target]["location"]):
+                self.addDynamicLib(lib)
 
-            run_make(self.build_folder)
+        run_make(self.build_folder)
 
-            process_targets_post_build_steps(self)
+        process_targets_post_build_steps(self)
 
+        return self.targets_as_dependencies(processed_targets)
+
+    def targets_as_dependencies(self, processed_targets):
+        dep_string = ''
+
+        for (name, properties) in processed_targets.iteritems():
+            extra_includes = []
+            if "includes" in properties:
+                extra_includes = properties["includes"].split(";")
+
+            dep_string += target_dependency_template.format(
+                includes=add_path_prefix_and_join(self.includes+extra_includes, self.current_dir, ' '),
+                libs=add_path_prefix_and_join([properties["location"]], '/', ' ')
+            )
+
+        return dep_string+'\n'+self.processed_dependencies
 
 
     def processCrabFile(self, build_info):
