@@ -28,32 +28,6 @@ build_types = {
 cmake_build_cmake_lists_template = get_file_content(pjoin(templates_dir, "CMakeBuild_CMakeLists.txt"))
 crabsys_build_cmake_lists_template = get_file_content(pjoin(templates_dir, "CrabsysBuild_CMakeLists.txt"))
 
-
-
-
-
-def retrieve_archive(dependency_info, context):
-    archive_url = dependency_info['archive']
-
-    file_name = os.path.basename(urlparse(archive_url).path)
-    if 'archive_file_name' in dependency_info:
-        file_name = dependency_info['archive_file_name']
-
-    archive_file_path = pjoin(context.libs_dir, file_name)
-    extracted_dir = pjoin(context.libs_dir, archive_file_path+"_extracted")
-
-    if not os.path.isfile(archive_file_path):
-        mkdir_p(context.libs_dir)
-        urllib.urlretrieve (archive_url, archive_file_path)
-
-        if not os.path.isdir(extracted_dir):
-            archive = tarfile.open(archive_file_path)
-            archive.extractall(path=extracted_dir, members=safemembers(archive))
-
-    return pjoin(extracted_dir, dependency_info['archive_path'])
-
-
-
 platform_names = {
     "linux": "linux2",
     "linux2": "linux2",
@@ -438,7 +412,8 @@ class Context:
                                        info.get('branch'),
                                        info.get('commit'),
                                        os.path.abspath(pjoin(self.parent_context.current_dir,
-                                                             libraries_folder_relative_path)))
+                                                             libraries_folder_relative_path)),
+                                       crabsys_config["update_dependencies"])
             elif 'path' in info:
                 if self.parent_context:
                     directory = pjoin(self.parent_context.current_dir, info["path"])
@@ -454,7 +429,10 @@ class Context:
             elif 'archive' in info:
                 if not self.parent_context:
                     raise Exception("Crab origin can't be a archive type build")
-                directory = retrieve_archive(info, self.parent_context)
+                directory = retrieve_archive(info.get('archive'),
+                                             info.get('archive_file_name'),
+                                             self.parent_context.libs_dir)
+                directory = pjoin(directory, info.get('archive_path', ''))
 
         if not directory:
             directory = "."

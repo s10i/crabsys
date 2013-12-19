@@ -38,6 +38,23 @@ def safemembers(members):
 ##############################################################################
 
 
+def retrieve_archive(archive_url, file_name, directory):
+    if not file_name:
+        file_name = os.path.basename(urlparse(archive_url).path)
+
+    archive_file_path = pjoin(directory, file_name)
+    extracted_dir = pjoin(directory, archive_file_path+"_extracted")
+
+    if not os.path.isfile(archive_file_path):
+        mkdir_p(directory)
+        urllib.urlretrieve (archive_url, archive_file_path)
+
+        if not os.path.isdir(extracted_dir):
+            archive = tarfile.open(archive_file_path)
+            archive.extractall(path=extracted_dir, members=safemembers(archive))
+
+    return extracted_dir
+
 
 def get_file_content(file_path):
     file_handle = open(file_path, 'r')
@@ -132,7 +149,7 @@ def git_pull(directory=None):
         raise Exception('Error running git pull: ' + directory + '\n' + stderr)
 
 
-def clone_repo(url, branch, commit, destination_path):
+def clone_repo(url, branch, commit, destination_path, force_update=False):
     repo_name = extract_repository_name_from_url(url)
 
     dependency_absolute_path = pjoin(destination_path, repo_name)
@@ -140,7 +157,7 @@ def clone_repo(url, branch, commit, destination_path):
     if os.path.exists(dependency_absolute_path):
         if os.path.isdir(dependency_absolute_path):
             git_status(directory=dependency_absolute_path)
-            if crabsys_config["update_dependencies"]:
+            if force_update:
                 git_pull(directory=dependency_absolute_path)
         else:
             raise Exception('Repository path exists but is not' +\
