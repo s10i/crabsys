@@ -4,8 +4,11 @@ import subprocess
 import tarfile
 import errno
 import os.path
+import glob
 import re
 import multiprocessing
+import urllib
+from urlparse import urlparse
 
 from sys import stderr
 from os.path import join as pjoin
@@ -54,6 +57,29 @@ def retrieve_archive(archive_url, file_name, directory):
             archive.extractall(path=extracted_dir, members=safemembers(archive))
 
     return extracted_dir
+
+
+def encapsulate(value):
+    if not isinstance(value, list):
+        return [value]
+
+    return value
+
+asList = encapsulate
+
+def processListOfFiles(files_list, prefix_path, allowGlobs=False):
+    return_list = []
+
+    for file_path in asList(files_list):
+        if type(file_path)==type({}):
+            if 'glob' in file_path:
+                glob_sources = glob.glob(pjoin(prefix_path, file_path['glob']))
+
+                return_list += glob_sources
+        else:
+            return_list += [pjoin(prefix_path, file_path)]
+
+    return return_list
 
 
 def get_file_content(file_path):

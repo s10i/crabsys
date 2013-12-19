@@ -1,13 +1,10 @@
 
 import os
 import json
-import glob
 import copy
 import time
 import sys
-import urllib
 
-from urlparse import urlparse
 from os.path import join as pjoin
 from config import crabsys_config
 from utils import *
@@ -76,30 +73,6 @@ def parseListOfBuildSteps(build_steps_info, context, attribute=None):
             return []
 
     return [BuildStep(info, context) for info in build_steps_info]
-
-
-def parseFlags(flags):
-    if isinstance(flags, basestring):
-        return [flags]
-
-    return flags
-
-def processListOfFiles(files_list, context, allowGlobs=False):
-    if isinstance(files_list, basestring):
-        files_list = [files_list]
-
-    return_list = []
-
-    for file_path in files_list:
-        if type(file_path)==type({}):
-            if 'glob' in file_path:
-                glob_sources = glob.glob(pjoin(context.current_dir, file_path['glob']))
-
-                return_list += glob_sources
-        else:
-            return_list += [pjoin(context.current_dir, file_path)]
-
-    return return_list
 
 
 class Target:
@@ -178,17 +151,17 @@ class Target:
                     self.sources_list_index[index] = int(list_id)
 
         if "target_files" in target_info:
-            self.target_files += processListOfFiles(target_info["target_files"], self.context)
+            self.target_files += processListOfFiles(target_info["target_files"], self.context.current_dir)
 
         if "sources" in target_info:
-            self.sources += processListOfFiles(target_info["sources"], self.context)
+            self.sources += processListOfFiles(target_info["sources"], self.context.current_dir)
 
         if 'flags' in target_info:
-            self.flags += parseFlags(target_info['flags'])
+            self.flags += asList(target_info['flags'])
         if 'compile_flags' in target_info:
-            self.compile_flags += parseFlags(target_info['compile_flags'])
+            self.compile_flags += asList(target_info['compile_flags'])
         if 'link_flags' in target_info:
-            self.link_flags += parseFlags(target_info['link_flags'])
+            self.link_flags += asList(target_info['link_flags'])
 
         self.pre_build_steps += parseListOfBuildSteps(target_info, self.context, "pre_build_steps")
         self.build_steps += parseListOfBuildSteps(target_info, self.context, "build_steps")
@@ -497,7 +470,7 @@ class Context:
                 if 'name' in sources_list:
                     self.sources_lists_names[sources_list['name']] = index
                 if 'sources' in sources_list:
-                    sources_list["sources"] = processListOfFiles(sources_list["sources"], self)
+                    sources_list["sources"] = processListOfFiles(sources_list["sources"], self.current_dir)
 
         if "targets" in self.build_info:
             self.targets = [Target(info, self) for info in self.build_info["targets"]]
