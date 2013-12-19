@@ -29,34 +29,7 @@ cmake_build_cmake_lists_template = get_file_content(pjoin(templates_dir, "CMakeB
 crabsys_build_cmake_lists_template = get_file_content(pjoin(templates_dir, "CrabsysBuild_CMakeLists.txt"))
 
 
-def clone_repo(dependency_info, context):
-    repo_url = dependency_info['repository']
-    repo_name = extract_repository_name_from_url(repo_url)
 
-    libs_dir = os.path.abspath(pjoin(context.current_dir,
-                                     context.libraries_folder_relative_path))
-
-    dependency_absolute_path = pjoin(libs_dir, repo_name)
-
-    if os.path.exists(dependency_absolute_path):
-        if os.path.isdir(dependency_absolute_path):
-            git_status(directory=dependency_absolute_path)
-            if crabsys_config["update_dependencies"]:
-                git_pull(directory=dependency_absolute_path)
-        else:
-            raise Exception('Repository dependency path exists but is not' +\
-                            ' a directory: ' + dependency_absolute_path)
-    else:
-        mkdir_p(os.path.abspath(libs_dir))
-
-        git_clone(repo_url, directory=libs_dir)
-
-        if 'branch' in dependency_info:
-            git_checkout(dependency_info['branch'], directory=dependency_absolute_path)
-        elif 'commit' in dependency_info:
-            git_checkout(dependency_info['commit'], directory=dependency_absolute_path)
-
-    return dependency_absolute_path
 
 
 def retrieve_archive(dependency_info, context):
@@ -347,7 +320,7 @@ class Target:
         libs_dest_path = ""
         if self.type == 'executable' and len(self.dynamic_libs_destination_path) > 0:
             libs_dest_path = pjoin(self.context.current_dir,
-                                   self.context.targets_relative_path,
+                                   targets_relative_path,
                                    self.dynamic_libs_destination_path)
             libs_id_path = pjoin('@rpath', self.dynamic_libs_destination_path)
 
@@ -461,7 +434,11 @@ class Context:
             if 'repository' in info:
                 if not self.parent_context:
                     raise Exception("Crab origin can't be a repository type build")
-                directory = clone_repo(info, self.parent_context)
+                directory = clone_repo(info['repository'],
+                                       info.get('branch'),
+                                       info.get('commit'),
+                                       os.path.abspath(pjoin(self.parent_context.current_dir,
+                                                             libraries_folder_relative_path)))
             elif 'path' in info:
                 if self.parent_context:
                     directory = pjoin(self.parent_context.current_dir, info["path"])
@@ -485,10 +462,6 @@ class Context:
         self.current_dir = os.path.abspath(directory)
         self.libs_dir = pjoin(self.current_dir, libraries_folder_relative_path)
         self.build_folder = pjoin(self.current_dir, build_folder_relative_path)
-
-        self.build_folder_relative_path = build_folder_relative_path
-        self.targets_relative_path = targets_relative_path
-        self.libraries_folder_relative_path = libraries_folder_relative_path
 
         self.cmake_lists_file_path = pjoin(self.build_folder, 'CMakeLists.txt')
 

@@ -75,28 +75,7 @@ def system_command(params=None, directory=None):
 
     return (retcode, stdout, stderr)
 
-def git_command(params=None, directory=None):
-    return system_command(['git'] + params, directory)
 
-def git_clone(url, directory=None):
-    (retcode, stdout, stderr) = git_command(params=['clone', url], directory=directory)
-    if retcode != 0:
-        raise Exception('Error cloning repository: ' + url + '\n' + stderr)
-
-def git_checkout(branch_or_commit, directory=None):
-    (retcode, stdout, stderr) = git_command(params=['checkout', branch_or_commit], directory=directory)
-    if retcode != 0:
-        raise Exception('Error checkouting repository: ' + url + '\n' + stderr)
-
-def git_status(directory=None):
-    (retcode, stdout, stderr) = git_command(params=['status'], directory=directory)
-    if retcode != 0:
-        raise Exception('Error getting repository status: ' + directory + '\n' + stderr)
-
-def git_pull(directory=None):
-    (retcode, stdout, stderr) = git_command(params=['pull'], directory=directory)
-    if retcode != 0:
-        raise Exception('Error running git pull: ' + directory + '\n' + stderr)
 
 def is_dynamic_lib(path):
     return re.match("^(.*)\.dylib", path) or re.match("^(.*)\.so(\.[0-9]*)?", path)
@@ -122,4 +101,60 @@ def run_cmake(directory=None):
                 output_values[key] = value
 
     return output_values
+
+
+
+
+##############################################################################
+## GIT UTILITIES #############################################################
+##############################################################################
+def git_command(params=None, directory=None):
+    return system_command(['git'] + params, directory)
+
+def git_clone(url, directory=None):
+    (retcode, stdout, stderr) = git_command(params=['clone', url], directory=directory)
+    if retcode != 0:
+        raise Exception('Error cloning repository: ' + url + '\n' + stderr)
+
+def git_checkout(branch_or_commit, directory=None):
+    (retcode, stdout, stderr) = git_command(params=['checkout', branch_or_commit], directory=directory)
+    if retcode != 0:
+        raise Exception('Error checkouting repository: ' + url + '\n' + stderr)
+
+def git_status(directory=None):
+    (retcode, stdout, stderr) = git_command(params=['status'], directory=directory)
+    if retcode != 0:
+        raise Exception('Error getting repository status: ' + directory + '\n' + stderr)
+
+def git_pull(directory=None):
+    (retcode, stdout, stderr) = git_command(params=['pull'], directory=directory)
+    if retcode != 0:
+        raise Exception('Error running git pull: ' + directory + '\n' + stderr)
+
+
+def clone_repo(url, branch, commit, destination_path):
+    repo_name = extract_repository_name_from_url(url)
+
+    dependency_absolute_path = pjoin(destination_path, repo_name)
+
+    if os.path.exists(dependency_absolute_path):
+        if os.path.isdir(dependency_absolute_path):
+            git_status(directory=dependency_absolute_path)
+            if crabsys_config["update_dependencies"]:
+                git_pull(directory=dependency_absolute_path)
+        else:
+            raise Exception('Repository path exists but is not' +\
+                            ' a directory: ' + dependency_absolute_path)
+    else:
+        mkdir_p(os.path.abspath(destination_path))
+
+        git_clone(url, directory=destination_path)
+
+        if branch:
+            git_checkout(branch, directory=dependency_absolute_path)
+        elif commit:
+            git_checkout(commit, directory=dependency_absolute_path)
+
+    return dependency_absolute_path
+##############################################################################
 
