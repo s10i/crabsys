@@ -54,9 +54,6 @@ def extract_repository_name_from_url(repo_url):
 
     return repo_name
 
-def add_path_prefix_and_join(values, prefix, separator):
-    return separator.join([pjoin(prefix, value) for value in values])
-
 def mkdir_p(path):
     try:
         os.makedirs(path)
@@ -106,9 +103,8 @@ def is_dynamic_lib(path):
 
 
 cmake_output_variables = {
-    "name": "__crabsys_target_name=",
-    "location": "__crabsys_target_location=",
-    "includes": "__crabsys_target_includes="
+    "location": "__crabsys_target_location",
+    "includes": "__crabsys_target_includes"
 }
 
 def run_cmake(directory=None):
@@ -118,30 +114,12 @@ def run_cmake(directory=None):
         print stderr
         return None
 
-    current_project_name = None
-    targets = {}
+    output_values = {}
     for line in stderr.split('\n'):
-        if line.startswith(cmake_output_variables['name']):
-            current_project_name = line[len(cmake_output_variables['name']):]
-            targets[current_project_name] = {}
-        else:
-            for (key,variable) in cmake_output_variables.iteritems():
-                if line.startswith(variable):
-                    value = line[len(variable):]
-                    targets[current_project_name][key] = value
+        for (key,variable) in cmake_output_variables.iteritems():
+            if line.startswith(variable+'='):
+                value = line[len(variable+'='):]
+                output_values[key] = value
 
-    return targets
-
-def run_make(directory=None, parallel_build=True):
-    cpu_count = multiprocessing.cpu_count()
-    if not parallel_build:
-        cpu_count = 1
-
-    (retcode, stdout, stderr) = system_command( ['make', '-j' + str(cpu_count)], directory )
-
-    if retcode != 0:
-        print "Error running make at directory: %s" % (directory)
-        print stderr
-
-    return retcode
+    return output_values
 

@@ -1,0 +1,101 @@
+
+cmake_minimum_required(VERSION 2.8)
+
+project ({{project_name}})
+
+{{#sources_lists_definitions}}
+set(__LIST_{{index}}_SRCS
+{{#sources}}
+{{.}}
+{{/sources}}
+)
+{{/sources_lists_definitions}}
+
+{{#dependencies_includes}}
+LIST(APPEND __CRABSYS_INCLUDE_DIRS {{.}})
+{{/dependencies_includes}}
+
+{{#dependencies_binaries}}
+LIST(APPEND __CRABSYS_LIBS {{.}})
+{{/dependencies_binaries}}
+
+set(__{{name}}_SRCS 
+{{#sources}}
+{{.}}
+{{/sources}}
+)
+
+set(__{{name}}_INCLUDE_DIRS 
+{{#includes}}
+{{.}}
+{{/includes}}
+)
+
+{{#executable}}
+add_executable({{name}} ${__{{name}}_SRCS} 
+{{/executable}}
+{{#library}}
+add_library({{name}} ${__{{name}}_SRCS} 
+{{/library}}
+{{#sources_lists}}
+${__LIST_{{.}}_SRCS}
+{{/sources_lists}}
+)
+
+target_link_libraries({{name}} ${__CRABSYS_LIBS})
+
+{{#executable}}
+set_target_properties({{name}} PROPERTIES RUNTIME_OUTPUT_DIRECTORY {{target_path}})
+{{/executable}}
+
+{{#library}}
+set_target_properties({{name}} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY {{target_path}})
+{{/library}}
+
+set_property(TARGET {{name}}
+             APPEND
+             PROPERTY INCLUDE_DIRECTORIES ${__{{name}}_INCLUDE_DIRS}
+                                          ${__CRABSYS_INCLUDE_DIRS})
+
+
+{{#executable}}
+IF(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    IF( NOT( "{{linux_rpath}}" STREQUAL "" ) )
+        set_target_properties({{name}} PROPERTIES INSTALL_RPATH "@loader_path/.")
+        set_target_properties({{name}} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
+    ENDIF()
+ENDIF()
+IF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    IF( NOT( "{{linux_rpath}}" STREQUAL "" ) )
+        set_target_properties({{name}} PROPERTIES INSTALL_RPATH "{{linux_rpath}}")
+        set_target_properties({{name}} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
+    ENDIF()
+ENDIF()
+{{/executable}}
+
+
+set_target_properties({{name}} PROPERTIES COMPILE_FLAGS "{{compile_flags}}")
+set_target_properties({{name}} PROPERTIES LINK_FLAGS "{{link_flags}}")
+
+get_target_property(__crabsys_target_{{name}}_location {{name}} LOCATION)
+MESSAGE("{{cmake_output_variables.location}}=${__crabsys_target_{{name}}_location}")
+
+
+IF( NOT( "{{dynamic_libraries_destination_path}}" STREQUAL "" ) )
+    add_custom_command(TARGET {{name}} PRE_BUILD
+                       COMMAND ${CMAKE_COMMAND} -E make_directory {{dynamic_libraries_destination_path}})
+ENDIF()
+
+
+{{#dynamic_libraries}}
+add_custom_command(TARGET {{name}} PRE_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy {{lib_original_path}} {{lib_destination_path}})
+
+IF(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+   add_custom_command(TARGET {{name}} PRE_BUILD
+                      COMMAND install_name_tool -id {{new_lib_id}} {{lib_original_path}})
+   add_custom_command(TARGET {{name}} PRE_BUILD
+                      COMMAND install_name_tool -id {{new_lib_id}} {{lib_destination_path}})
+ENDIF()
+{{/dynamic_libraries}}
+

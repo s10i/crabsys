@@ -1,0 +1,13 @@
+
+cmake_minimum_required(VERSION 2.8)
+
+project ({project_name})
+
+set(CMAKE_MODULE_PATH ${{CMAKE_MODULE_PATH}} "{search_path}")
+
+find_package({name} REQUIRED)
+LIST(APPEND __CRABSYS_{name}_INCLUDE_DIRS ${{{upper_name}_INCLUDE_DIR}})
+LIST(APPEND __CRABSYS_{name}_LIBS ${{{upper_name}_LIBRARIES}})
+
+MESSAGE("{cmake_output_variables[location]}=${{__CRABSYS_{name}_LIBS}}")
+MESSAGE("{cmake_output_variables[includes]}=${{__CRABSYS_{name}_INCLUDE_DIRS}}")
