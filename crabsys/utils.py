@@ -60,6 +60,9 @@ def retrieve_archive(archive_url, file_name, directory):
 
 
 def encapsulate(value):
+    if value is None:
+        return []
+
     if not isinstance(value, list):
         return [value]
 

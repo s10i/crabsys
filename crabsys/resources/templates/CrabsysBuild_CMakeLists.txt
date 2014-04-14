@@ -60,13 +60,13 @@ set_property(TARGET {{name}}
 
 {{#executable}}
 IF(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    IF( NOT( "{{linux_rpath}}" STREQUAL "" ) )
+    IF( NOT( "{{dynamic_libraries_destination_path}}" STREQUAL "" ) )
         set_target_properties({{name}} PROPERTIES INSTALL_RPATH "@loader_path/.")
         set_target_properties({{name}} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
     ENDIF()
 ENDIF()
 IF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-    IF( NOT( "{{linux_rpath}}" STREQUAL "" ) )
+    IF( NOT( "{{dynamic_libraries_destination_path}}" STREQUAL "" ) )
         set_target_properties({{name}} PROPERTIES INSTALL_RPATH "{{linux_rpath}}")
         set_target_properties({{name}} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
     ENDIF()

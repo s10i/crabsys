@@ -46,17 +46,13 @@ class BuildStep:
     def __init__(self, build_step_info, context):
         self.context = context
 
-        self.directory = ""
-        if "directory" in build_step_info:
-            self.directory = build_step_info["directory"]
-
-        self.params = []
-        if "params" in build_step_info:
-            self.params = build_step_info["params"]
+        self.directory = build_step_info.get("directory", "")
+        self.params = build_step_info.get("params", [])
 
         if "command" not in build_step_info:
             raise Exception("A command requires a 'command' attribute!")
-        self.command = build_step_info["command"]
+
+        self.command = build_step_info.get("command")
 
     def run(self):
         (retcode, stdout, stderr) = system_command([self.command]+self.params, pjoin(self.context.current_dir, self.directory))
@@ -67,10 +63,7 @@ class BuildStep:
 
 def parseListOfBuildSteps(build_steps_info, context, attribute=None):
     if attribute:
-        if attribute in build_steps_info:
-            build_steps_info = build_steps_info[attribute]
-        else:
-            return []
+        build_steps_info = build_steps_info.get(attribute, [])
 
     return [BuildStep(info, context) for info in build_steps_info]
 
@@ -114,14 +107,15 @@ class Target:
 
         self.extend(target_info)
 
-        if 'system_specific' in target_info:
-            for system in target_info['system_specific']:
-                platform = system
-                if system in platform_names:
-                    platform = platform_names[system]
+        for system in target_info.get('system_specific', {}):
+            platform = system
+            if system in platform_names:
+                platform = platform_names[system]
 
-                if platform == sys.platform:
-                    self.extend(target_info['system_specific'][system])
+            if platform == sys.platform:
+                self.extend(target_info.get('system_specific')[system])
+
+        print self.name
 
         self.process()
         self.build()
@@ -130,89 +124,60 @@ class Target:
 
 
     def extend(self, target_info):
-        if "name" in target_info:
-            self.name = target_info["name"]
+        if self.name is None:
+            self.name = target_info.get("name", os.path.basename(self.context.current_dir))
+        if self.type is None:
+            self.type = target_info.get("type")
 
-        if "type" in target_info:
-            self.type = target_info["type"]
+        self.includes += [pjoin(self.context.current_dir, i) for i in target_info.get("includes", [])]
 
-        if "includes" in target_info:
-            self.includes += [pjoin(self.context.current_dir, i) for i in target_info["includes"]]
+        self.sources_lists += target_info.get("sources_lists", [])
+        for (index, list_id) in enumerate(self.sources_lists):
+            if list_id in self.context.sources_lists_names:
+                self.sources_lists[index] = self.context.sources_lists_names[list_id]
+            else:
+                if list_id < 0 or list_id >= len(self.context.sources_lists_names):
+                    raise Exception("Invalid sources list id: "+str(list_id))
 
-        if "sources_lists" in target_info:
-            self.sources_lists += target_info["sources_lists"]
-            for (index, list_id) in enumerate(self.sources_lists):
-                if list_id in self.context.sources_lists_names:
-                    self.sources_lists[index] = self.context.sources_lists_names[list_id]
-                else:
-                    if list_id < 0 or list_id >= len(self.context.sources_lists_names):
-                        raise Exception("Invalid sources list id: "+str(list_id))
+                self.sources_list_index[index] = int(list_id)
 
-                    self.sources_list_index[index] = int(list_id)
+        self.target_files += processListOfFiles(target_info.get("target_files", []), self.context.current_dir)
+        self.sources += processListOfFiles(target_info.get("sources", []), self.context.current_dir)
 
-        if "target_files" in target_info:
-            self.target_files += processListOfFiles(target_info["target_files"], self.context.current_dir)
-
-        if "sources" in target_info:
-            self.sources += processListOfFiles(target_info["sources"], self.context.current_dir)
-
-        if 'flags' in target_info:
-            self.flags += asList(target_info['flags'])
-        if 'compile_flags' in target_info:
-            self.compile_flags += asList(target_info['compile_flags'])
-        if 'link_flags' in target_info:
-            self.link_flags += asList(target_info['link_flags'])
+        self.flags += asList(target_info.get('flags', []))
+        self.compile_flags += asList(target_info.get('compile_flags', []))
+        self.link_flags += asList(target_info.get('link_flags', []))
 
         self.pre_build_steps += parseListOfBuildSteps(target_info, self.context, "pre_build_steps")
         self.build_steps += parseListOfBuildSteps(target_info, self.context, "build_steps")
         self.post_build_steps += parseListOfBuildSteps(target_info, self.context, "post_build_steps")
 
-        if "search_path" in target_info:
-            self.cmake_search_path = target_info["search_path"]
+        self.cmake_search_path = target_info.get("search_path", "")
 
-        if "build_type" in target_info:
-            self.build_type = target_info["build_type"]
+        self.build_type = target_info.get("build_type", "crabsys")
 
-        if "dependencies" in target_info:
-            self.dependencies += [Context(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in target_info["dependencies"]]
+        self.dependencies += [Context(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in target_info.get("dependencies", [])]
+        self.build_dependencies += [Context(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in target_info.get("build_dependencies", [])]
 
-        if "build_dependencies" in target_info:
-            self.build_dependencies += [Context(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in target_info["build_dependencies"]]
-
-        if "dependencies_dynamic_libs_destination_path" in target_info:
-            self.dynamic_libs_destination_path = target_info["dependencies_dynamic_libs_destination_path"]
-            self.linux_rpath = pjoin("$ORIGIN", self.dynamic_libs_destination_path)
+        self.dynamic_libs_destination_path = target_info.get("dependencies_dynamic_libs_destination_path", "")
+        self.linux_rpath = pjoin("$ORIGIN", self.dynamic_libs_destination_path)
 
         # Autoconf builds
         if self.build_type == "autoconf":
-            autoconf_build_steps = [
-                { "command": "./configure" },
-                { "command": "make" }
+            autoconf_directory = target_info.get("autoconf_directory", "")
+
+            self.build_steps += [
+                BuildStep({
+                    "command": "./configure",
+                    "directory": target_info.get("configure_directory", autoconf_directory),
+                    "params": target_info.get("configure_params", [])
+                }, self.context),
+                BuildStep({
+                    "command": "make",
+                    "directory": target_info.get("make_directory", autoconf_directory),
+                    "params": target_info.get("make_params", [])
+                }, self.context)
             ]
-
-            configure_command = autoconf_build_steps[0]
-            make_command = autoconf_build_steps[1]
-
-            # Run directory
-            if "autoconf_directory" in target_info:
-                configure_command["directory"] = target_info["autoconf_directory"]
-                make_command["directory"] = target_info["autoconf_directory"]
-
-            if "configure_directory" in target_info:
-                configure_command["directory"] = target_info["configure_directory"]
-
-            if "make_directory" in target_info:
-                make_command["directory"] = target_info["make_directory"]
-
-            # Commands parameters
-            if "configure_params" in target_info:
-                configure_command["params"] = target_info["configure_params"]
-
-            if "make_params" in target_info:
-                make_command["params"] = target_info["make_params"]
-
-            for step in autoconf_build_steps:
-                self.build_steps += [BuildStep(step, self.context)]
 
 
     def runBuildSteps(self, steps):
@@ -241,7 +206,7 @@ class Target:
             self.processed = True
 
     def processAsCMakeBuild(self):
-        search_path = ''
+        search_path = ""
         if self.cmake_search_path != "":
             search_path = pjoin(self.context.current_dir, self.cmake_search_path)
 
@@ -281,6 +246,8 @@ class Target:
                         "lib_destination_path": pjoin(libs_dest_path, lib_basename),
                     })
 
+        print self.build_folder
+        print self.type
         self.generateCMakeListsFile(pystache.render(crabsys_build_cmake_lists_template,
             {
                 'project_name': self.name,
