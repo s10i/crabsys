@@ -117,9 +117,6 @@ class Target:
 
         print self.name
 
-        self.process()
-        self.build()
-
         print ("--"*self.context.level) + "-> Done - %f seconds" % (time.time()-start_time)
 
 
@@ -156,8 +153,8 @@ class Target:
 
         self.build_type = target_info.get("build_type", "crabsys")
 
-        self.dependencies += [Context(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in target_info.get("dependencies", [])]
-        self.build_dependencies += [Context(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in target_info.get("build_dependencies", [])]
+        self.dependencies += [getContext(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in target_info.get("dependencies", [])]
+        self.build_dependencies += [getContext(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in target_info.get("build_dependencies", [])]
 
         self.dynamic_libs_destination_path = target_info.get("dependencies_dynamic_libs_destination_path", "")
         self.linux_rpath = pjoin("$ORIGIN", self.dynamic_libs_destination_path)
@@ -339,45 +336,58 @@ class Target:
 
             self.built = True
 
+context_cache = {}
+
+def getContext(parent_context, info):
+    directory = None
+
+    if info:
+        if 'repository' in info:
+            if not parent_context:
+                raise Exception("Crab origin can't be a repository type build")
+            directory = clone_repo(info['repository'],
+                                   info.get('branch'),
+                                   info.get('commit'),
+                                   os.path.abspath(pjoin(parent_context.current_dir,
+                                                         libraries_folder_relative_path)),
+                                   crabsys_config["update_dependencies"])
+        elif 'path' in info:
+            if parent_context:
+                directory = pjoin(parent_context.current_dir, info["path"])
+        elif 'cmake' in info:
+            if 'name' not in info:
+                info['name'] = info['cmake']
+            if 'search_path' in info and parent_context:
+                info["search_path"] = pjoin(parent_context.current_dir, info["search_path"])
+
+            if parent_context:
+                directory = pjoin(parent_context.libs_dir, "cmake_dep_"+info['name'])
+                mkdir_p(directory)
+        elif 'archive' in info:
+            if not parent_context:
+                raise Exception("Crab origin can't be a archive type build")
+            directory = retrieve_archive(info.get('archive'),
+                                         info.get('archive_file_name'),
+                                         parent_context.libs_dir)
+            directory = pjoin(directory, info.get('archive_path', ''))
+
+    if not directory:
+        directory = "."
+
+    context_dir = os.path.abspath(directory)
+
+    if context_dir in context_cache:
+        return context_cache[context_dir]
+    else:
+        return Context(parent_context=parent_context, info=info, directory=context_dir)
 
 class Context:
     def __init__(self, parent_context=None, info=None, directory=None):
         self.parent_context = parent_context
-
-        if info:
-            if 'repository' in info:
-                if not self.parent_context:
-                    raise Exception("Crab origin can't be a repository type build")
-                directory = clone_repo(info['repository'],
-                                       info.get('branch'),
-                                       info.get('commit'),
-                                       os.path.abspath(pjoin(self.parent_context.current_dir,
-                                                             libraries_folder_relative_path)),
-                                       crabsys_config["update_dependencies"])
-            elif 'path' in info:
-                if self.parent_context:
-                    directory = pjoin(self.parent_context.current_dir, info["path"])
-            elif 'cmake' in info:
-                if 'name' not in info:
-                    info['name'] = info['cmake']
-                if 'search_path' in info and self.parent_context:
-                    info["search_path"] = pjoin(self.parent_context.current_dir, info["search_path"])
-
-                if self.parent_context:
-                    directory = pjoin(self.parent_context.libs_dir, "cmake_dep_"+info['name'])
-                    mkdir_p(directory)
-            elif 'archive' in info:
-                if not self.parent_context:
-                    raise Exception("Crab origin can't be a archive type build")
-                directory = retrieve_archive(info.get('archive'),
-                                             info.get('archive_file_name'),
-                                             self.parent_context.libs_dir)
-                directory = pjoin(directory, info.get('archive_path', ''))
-
-        if not directory:
-            directory = "."
-
         self.current_dir = os.path.abspath(directory)
+
+        context_cache[self.current_dir] = self
+
         self.libs_dir = pjoin(self.current_dir, libraries_folder_relative_path)
         self.build_folder = pjoin(self.current_dir, build_folder_relative_path)
 
@@ -440,9 +450,18 @@ class Context:
                     sources_list["sources"] = processListOfFiles(sources_list["sources"], self.current_dir)
 
         if "targets" in self.build_info:
-            self.targets = [Target(info, self) for info in self.build_info["targets"]]
+            self.targets = []
+
+            # Can't use list comprehension here because it breaks
+            # intra-context dependencies
+            for info in self.build_info["targets"]:
+                self.targets.append(Target(info, self))
         else:
             self.targets = [Target(self.build_info, self)]
+
+        for target in self.targets:
+            target.process()
+            target.build()
 
     def getTarget(self, target_name):
         for t in self.targets:
