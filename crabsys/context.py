@@ -308,10 +308,14 @@ class Target:
 
     def shouldBuild(self):
         if self.build_type == "crabsys":
+            print "Because CRABSYS!!!"
             return True
+        elif self.build_type == "cmake":
+            return False
 
         for dep in self.dependencies:
             if dep.built:
+                print "Because dependency was just built"
                 return True
 
         for target_file in self.target_files:
@@ -322,6 +326,9 @@ class Target:
                 crab_file_last_modification = os.stat(self.context.getOriginalCrabFilePath()).st_mtime
 
                 if crab_file_last_modification > file_last_modification:
+                    print "Because of the file modification dates"
+                    print "Original crab file modification time: ", crab_file_last_modification
+                    print "Target file modification time (%s): %d" % ( target_file_path, file_last_modification )
                     return True
             else:
                 return True
@@ -329,7 +336,9 @@ class Target:
         return False
 
     def build(self):
+        print "Shoud build?"
         if self.shouldBuild():
+            print "Yes, please"
             self.runBuildSteps(self.pre_build_steps)
             self.runBuildSteps(self.build_steps)
             self.runBuildSteps(self.post_build_steps)
