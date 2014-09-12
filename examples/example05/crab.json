@@ -1,0 +1,32 @@
+{
+    "targets": [
+        {
+            "dependencies": [
+                {
+                    "name": "mysql",
+                    "archive": "http://dev.mysql.com/get/Downloads/Connector-C/mysql-connector-c-6.1.5-src.tar.gz",
+                    "archive_path": "mysql-connector-c-6.1.5-src",
+                    "type": "custom",
+                    "build_steps": [
+                        { "command": "cmake", "params": ["."] },
+                        { "command": "cmake", "params": ["--build", "."] }
+                    ],
+                    "includes": [
+                        "include"
+                    ],
+                    "target_files": [
+                        "libmysql/libmysqlclient.so.18"
+                    ]
+                }
+            ],
+            "type": "executable",
+            "name": "test.run",
+            "sources": [
+                "main.cpp"
+            ],
+            "includes": [
+                "."
+            ]
+        }
+    ]
+}

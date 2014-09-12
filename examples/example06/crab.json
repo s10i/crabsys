@@ -1,0 +1,37 @@
+{
+    "sources_lists": [
+        {
+            "name": "main_sources",
+            "sources": [
+                {"glob": "*.cpp"}
+            ]
+        }
+    ],
+    "targets": [
+        {
+            "name": "main.run",
+            "type": "executable",
+            "dependencies": [
+                {
+                    "name": "libcurl",
+                    "type": "autoconf",
+                    "archive": "http://curl.haxx.se/download/curl-7.33.0.tar.gz",
+                    "archive_path": "curl-7.33.0",
+                    "includes": [
+                        "include"
+                    ],
+                    "target_files": [
+                        "lib/.libs/libcurl.a"
+                    ],
+                    "dependencies": [
+                        { "cmake": "OpenSSL" },
+                        { "cmake": "ZLIB" }
+                    ]
+                }
+            ],
+            "sources_lists": [
+                "main_sources"
+            ]
+        }
+    ]
+}

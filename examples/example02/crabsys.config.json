@@ -1,0 +1,3 @@
+{
+    "compile_flags": ["-std=c++11"]
+}

@@ -9,6 +9,9 @@
 # Build files
 build
 
+# Default dependencies directory
+libs
+
 # Temporary directory
 tmp
 

@@ -1,11 +1,10 @@
 {
-    "project_name": "proj2",
     "targets": [
         {
+            "name": "crablib",
             "type": "library",
-            "name": "proj2",
             "sources": [
-                "func.cpp"
+                "crab.cpp"
             ],
             "includes": [
                 "."

@@ -1,0 +1,16 @@
+{
+    "targets": [
+        {
+            "dependencies": [
+                {
+                    "path": "../example03",
+                    "name": "crablib"
+                }
+            ],
+            "type": "executable",
+            "sources": [
+                "main.cpp"
+            ]
+        }
+    ]
+}
