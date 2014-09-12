@@ -142,8 +142,8 @@ class Target:
         self.sources += processListOfFiles(target_info.get("sources", []), self.context.current_dir)
 
         self.flags += asList(target_info.get('flags', []))
-        self.compile_flags += asList(target_info.get('compile_flags', []))
-        self.link_flags += asList(target_info.get('link_flags', []))
+        self.compile_flags += asList(target_info.get('compile_flags', crabsys_config["compile_flags"]))
+        self.link_flags += asList(target_info.get('link_flags', crabsys_config["link_flags"]))
 
         self.pre_build_steps += parseListOfBuildSteps(target_info, self.context, "pre_build_steps")
         self.build_steps += parseListOfBuildSteps(target_info, self.context, "build_steps")
@@ -287,7 +287,8 @@ class Target:
         if os.path.isfile(cmake_lists_file_path):
             if get_file_content(cmake_lists_file_path) == content:
                 return
-            if os.stat(cmake_lists_file_path).st_mtime > os.stat(self.context.getOriginalCrabFilePath()).st_mtime:
+            if ( self.context.getOriginalCrabFilePath() is not None and
+                 os.stat(cmake_lists_file_path).st_mtime > os.stat(self.context.getOriginalCrabFilePath()).st_mtime ):
                 return
 
         # Make sure the 'build' folder exists

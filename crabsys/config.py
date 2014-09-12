@@ -10,13 +10,14 @@ config_files_locations = [
     "~/.crabsys/crabsys.config.json",
     "~/.crabsys.config.json",
     ".crabsys/crabsys.config.json",
-    ".crabsys.config.json"
+    ".crabsys.config.json",
+    "./crabsys.config.json"
 ]
 
 crabsys_config = {
     "update_dependencies": False,
-    "compile_flags": "-Wall",
-    "link_flags": "",
+    "compile_flags": ["-Wall"],
+    "link_flags": [],
     "includes": [
         "."
     ],
