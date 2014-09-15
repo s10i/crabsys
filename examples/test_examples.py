@@ -132,7 +132,7 @@ def testExample(example, keep):
 
 
     # Checks
-    target_path = os.path.join( build_folder, example["target"] )
+    target_path = os.path.abspath( os.path.join( build_folder, example["target"] ) )
 
     if not os.path.exists( target_path ):
         print "Target not found: ", target_path
@@ -143,7 +143,7 @@ def testExample(example, keep):
         exit(2)
 
     if example["type"] == "executable":
-        output = subprocess.check_output([ target_path ])
+        output = subprocess.check_output([ target_path ], cwd=example["path"])
         if output != example["output"]:
             print "Unexpected output:"
             print output
@@ -163,7 +163,7 @@ def testExample(example, keep):
     elapsed_time = time.time() - start_time
 
     if elapsed_time > REPLAY_MAX_TIME:
-        print "Replay took too long: ", elapsed_time
+        print "Replay took too long: %lf (%s)" % (elapsed_time, example["path"])
 ##############################################################################
 
 

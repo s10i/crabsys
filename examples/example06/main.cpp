@@ -12,6 +12,8 @@ int main() {
 
     curl = curl_easy_init();
     if(curl) {
+        curl_easy_setopt(curl, CURLOPT_CAINFO, "./ca-bundle.crt");
+
         curl_easy_setopt(curl, CURLOPT_URL, "https://example.com");
         /* example.com is redirected, so we tell libcurl to follow
             redirection */ 

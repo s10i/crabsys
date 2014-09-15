@@ -10,5 +10,7 @@ int main() {
 
     MYSQL *mysql = mysql_init(NULL);
 
+    mysql_close( mysql );
+
     return 0;
 }

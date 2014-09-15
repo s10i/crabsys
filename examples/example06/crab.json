@@ -17,6 +17,7 @@
                     "type": "autoconf",
                     "archive": "http://curl.haxx.se/download/curl-7.33.0.tar.gz",
                     "archive_path": "curl-7.33.0",
+                    "configure_params": ["--disable-ldap", "--disable-ldaps", "--without-librtmp", "--without-libidn"],
                     "includes": [
                         "include"
                     ],

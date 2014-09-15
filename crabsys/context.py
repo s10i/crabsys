@@ -151,7 +151,7 @@ class Target:
 
         self.cmake_search_path = target_info.get("search_path", "")
 
-        self.build_type = target_info.get("build_type", "crabsys")
+        self.build_type = target_info.get("build_type", self.build_type)
 
         self.dependencies += [getContext(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in target_info.get("dependencies", [])]
         self.build_dependencies += [getContext(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in target_info.get("build_dependencies", [])]
@@ -418,7 +418,7 @@ class Context:
             self.build_type = self.build_info["type"]
 
             if self.build_type in build_types:
-                self.build_type = build_type[self.build_type]
+                self.build_type = build_types[self.build_type]
         elif "cmake" in self.build_info:
             self.build_type = "cmake"
         else:

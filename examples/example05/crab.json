@@ -14,9 +14,18 @@
                     "includes": [
                         "include"
                     ],
-                    "target_files": [
-                        "libmysql/libmysqlclient.so.18"
-                    ]
+                    "system_specific": {
+                        "darwin": {
+                            "target_files": [
+                                "libmysql/libmysqlclient.18.dylib"
+                            ]
+                        },
+                        "linux": {
+                            "target_files": [
+                                "libmysql/libmysqlclient.so.18"
+                            ]
+                        }
+                    }
                 }
             ],
             "type": "executable",
