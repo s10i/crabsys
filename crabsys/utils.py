@@ -13,6 +13,9 @@ from urlparse import urlparse
 from sys import stderr
 from os.path import join as pjoin
 
+
+
+
 ##############################################################################
 # TAR FILES HANDLING
 resolved = lambda x: os.path.realpath(os.path.abspath(x))
@@ -202,5 +205,30 @@ def clone_repo(url, branch, commit, destination_path, force_update=False):
             git_checkout(commit, directory=dependency_absolute_path)
 
     return dependency_absolute_path
+##############################################################################
+
+
+
+##############################################################################
+# Useful variables/constants
+##############################################################################
+build_folder_relative_path = pjoin('build', '.build')
+targets_relative_path = 'build'
+libraries_folder_relative_path = 'libs'
+
+resources_dir = pjoin(os.path.dirname(os.path.realpath(__file__)), 'resources')
+templates_dir = pjoin(resources_dir, 'templates')
+
+build_types = {
+    "crab": "crabsys"
+}
+
+cmake_build_cmake_lists_template = get_file_content(pjoin(templates_dir, "CMakeBuild_CMakeLists.txt"))
+crabsys_build_cmake_lists_template = get_file_content(pjoin(templates_dir, "CrabsysBuild_CMakeLists.txt"))
+
+platform_names = {
+    "linux": "linux2",
+    "linux2": "linux2",
+}
 ##############################################################################
 
