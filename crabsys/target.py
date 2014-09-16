@@ -14,8 +14,23 @@ from utils import *
 from config import crabsys_config
 
 
+
 ##############################################################################
-class Target:
+def createTarget(target_info, context):
+    if target_info.get("build_type") == "autoconf":
+        return AutoconfTarget(target_info, context)
+    elif target_info.get("build_type") == "cmake":
+        return CMakeTarget(target_info, context)
+    elif target_info.get("build_type") == "custom":
+        return CustomBuildTarget(target_info, context)
+
+    return CrabsysTarget(target_info, context)
+##############################################################################
+
+
+
+##############################################################################
+class BaseTarget(object):
     def __init__(self, target_info, context):
         self.context = context
 
@@ -98,38 +113,10 @@ class Target:
         self.dynamic_libs_destination_path = target_info.get("dependencies_dynamic_libs_destination_path", "")
         self.linux_rpath = pjoin("$ORIGIN", self.dynamic_libs_destination_path)
 
-        # Autoconf builds
-        if self.build_type == "autoconf":
-            autoconf_directory = target_info.get("autoconf_directory", "")
-
-            self.build_steps += [
-                BuildStep({
-                    "command": "./configure",
-                    "directory": target_info.get("configure_directory", autoconf_directory),
-                    "params": target_info.get("configure_params", [])
-                }, self.context),
-                BuildStep({
-                    "command": "make",
-                    "directory": target_info.get("make_directory", autoconf_directory),
-                    "params": target_info.get("make_params", [])
-                }, self.context)
-            ]
-
 
     def runBuildSteps(self, steps):
         for step in steps:
             step.run()
-
-    def getAllDependenciesIncludesAndBinaries(self):
-        includes = []
-        binaries = []
-        for dep in self.dependencies:
-            (dep_includes, dep_binaries) = dep.getAllDependenciesIncludesAndBinaries()
-            includes += [pjoin(dep.context.current_dir, i) for i in dep.includes]+dep_includes
-            binaries += dep.target_files+dep_binaries
-
-        return (includes, binaries)
-
 
     def process(self):
         start_time = time.time()
@@ -147,32 +134,101 @@ class Target:
         self.build_folder = pjoin(self.context.build_folder, "__target_"+self.name)
 
         if not self.processed:
-            if self.build_type == "cmake":
-                self.processAsCMakeBuild()
-            elif self.build_type == "crabsys":
-                self.processAsCrabsysBuild()
-
+            self._process()
             self.processed = True
 
         print ("--"*self.context.level) + "-> Done - %f seconds" % (time.time()-start_time)
 
 
-    def processAsCMakeBuild(self):
-        search_path = ""
-        if self.cmake_search_path != "":
-            search_path = pjoin(self.context.current_dir, self.cmake_search_path)
+    def shouldBuild(self):
+        for dep in self.dependencies:
+            if dep.built:
+                print "Because dependency was just built"
+                return True
 
-        self.generateCMakeListsFile(cmake_build_cmake_lists_template.format(
-            project_name = self.name,
-            name = self.name,
-            upper_name = self.name.upper(),
-            search_path=search_path,
-            cmake_output_variables=cmake_output_variables
-        ))
+        for target_file in self.target_files:
+            target_file_path = pjoin(self.context.current_dir, target_file)
 
-        output_values = run_cmake(self.build_folder)
+            if os.path.isfile(target_file_path):
+                file_last_modification = os.stat(target_file_path).st_mtime
+                crab_file_last_modification = os.stat(self.context.getOriginalCrabFilePath()).st_mtime
 
-        self.processCMakeOutputValues(output_values)
+                if crab_file_last_modification > file_last_modification:
+                    print "Because of the file modification dates"
+                    print "Original crab file modification time: ", crab_file_last_modification
+                    print "Target file modification time (%s): %d" % ( target_file_path, file_last_modification )
+                    return True
+            else:
+                return True
+
+        return False
+
+    def build(self):
+        start_time = time.time()
+        print ("--"*self.context.level) + "-> Building # %s #" % (self.name)
+
+        for dependency in self.dependencies:
+            dependency.build()
+
+        for dependency in self.build_dependencies:
+            dependency.build()
+
+        if self.shouldBuild():
+            print "Yes, please"
+            self.runBuildSteps(self.pre_build_steps)
+            self.runBuildSteps(self.build_steps)
+            self.runBuildSteps(self.post_build_steps)
+
+            self.built = True
+
+        print ("--"*self.context.level) + "-> Done - %f seconds" % (time.time()-start_time)
+
+    def getAllDependenciesIncludesAndBinaries(self):
+        includes = []
+        binaries = []
+        for dep in self.dependencies:
+            (dep_includes, dep_binaries) = dep.getAllDependenciesIncludesAndBinaries()
+            includes += [pjoin(dep.context.current_dir, i) for i in dep.includes]+dep_includes
+            binaries += dep.target_files+dep_binaries
+
+        return (includes, binaries)
+##############################################################################
+
+
+
+##############################################################################
+class AutoconfTarget(BaseTarget):
+    def __init__(self, target_info, context):
+        super(AutoconfTarget, self).__init__(target_info, context)
+
+        autoconf_directory = target_info.get("autoconf_directory", "")
+
+        self.build_steps = [
+            BuildStep({
+                "command": "./configure",
+                "directory": target_info.get("configure_directory", autoconf_directory),
+                "params": target_info.get("configure_params", [])
+            }, self.context),
+            BuildStep({
+                "command": "make",
+                "directory": target_info.get("make_directory", autoconf_directory),
+                "params": target_info.get("make_params", [])
+            }, self.context)
+        ]
+
+    def _process(self):
+        pass
+##############################################################################
+
+
+
+##############################################################################
+class CrabsysTarget(BaseTarget):
+    def __init__(self, target_info, context):
+        super(CrabsysTarget, self).__init__(target_info, context)
+
+    def _process(self):
+        self.processAsCrabsysBuild()
 
     def processAsCrabsysBuild(self):
         if len(self.sources) == 0 and len(self.sources_lists) == 0:
@@ -263,41 +319,74 @@ class Target:
             self.target_files += output_values["location"].split(";")
 
     def shouldBuild(self):
-        if self.build_type == "crabsys":
-            print "Because CRABSYS!!!"
-            return True
-        elif self.build_type == "cmake":
-            return False
-
-        for dep in self.dependencies:
-            if dep.built:
-                print "Because dependency was just built"
-                return True
-
-        for target_file in self.target_files:
-            target_file_path = pjoin(self.context.current_dir, target_file)
-
-            if os.path.isfile(target_file_path):
-                file_last_modification = os.stat(target_file_path).st_mtime
-                crab_file_last_modification = os.stat(self.context.getOriginalCrabFilePath()).st_mtime
-
-                if crab_file_last_modification > file_last_modification:
-                    print "Because of the file modification dates"
-                    print "Original crab file modification time: ", crab_file_last_modification
-                    print "Target file modification time (%s): %d" % ( target_file_path, file_last_modification )
-                    return True
-            else:
-                return True
-
-        return False
-
-    def build(self):
-        print "Shoud build?"
-        if self.shouldBuild():
-            print "Yes, please"
-            self.runBuildSteps(self.pre_build_steps)
-            self.runBuildSteps(self.build_steps)
-            self.runBuildSteps(self.post_build_steps)
-
-            self.built = True
+        return True
 ##############################################################################
+
+
+
+##############################################################################
+class CMakeTarget(BaseTarget):
+    def __init__(self, target_info, context):
+        super(CMakeTarget, self).__init__(target_info, context)
+
+    def _process(self):
+        self.processAsCMakeBuild()
+
+    def generateCMakeListsFile(self, content):
+        cmake_lists_file_path = pjoin(self.build_folder, 'CMakeLists.txt')
+
+        if os.path.isfile(cmake_lists_file_path):
+            if get_file_content(cmake_lists_file_path) == content:
+                return
+            if ( self.context.getOriginalCrabFilePath() is not None and
+                 os.stat(cmake_lists_file_path).st_mtime > os.stat(self.context.getOriginalCrabFilePath()).st_mtime ):
+                return
+
+        # Make sure the 'build' folder exists
+        if not os.path.exists(self.build_folder):
+            os.makedirs(self.build_folder)
+
+        # Write CMakeLists.txt file with generated content
+        cmake_file = open(cmake_lists_file_path, 'w')
+        cmake_file.write(content)
+        cmake_file.close()
+
+    def processCMakeOutputValues(self, output_values):
+        if "includes" in output_values:
+            self.includes += [pjoin(self.context.current_dir, i) for i in output_values["includes"].split(";")]
+
+        if "location" in output_values:
+            self.target_files += output_values["location"].split(";")
+
+    def processAsCMakeBuild(self):
+        search_path = ""
+        if self.cmake_search_path != "":
+            search_path = pjoin(self.context.current_dir, self.cmake_search_path)
+
+        self.generateCMakeListsFile(cmake_build_cmake_lists_template.format(
+            project_name = self.name,
+            name = self.name,
+            upper_name = self.name.upper(),
+            search_path=search_path,
+            cmake_output_variables=cmake_output_variables
+        ))
+
+        output_values = run_cmake(self.build_folder)
+
+        self.processCMakeOutputValues(output_values)
+
+    def shouldBuild(self):
+        return False
+##############################################################################
+
+
+
+##############################################################################
+class CustomBuildTarget(BaseTarget):
+    def __init__(self, target_info, context):
+        super(CustomBuildTarget, self).__init__(target_info, context)
+
+    def _process(self):
+        pass
+##############################################################################
+

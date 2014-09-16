@@ -6,7 +6,7 @@ import copy
 from os.path import join as pjoin
 from config import crabsys_config
 from utils import *
-from target import Target
+from target import createTarget
 
 
 ##############################################################################
@@ -151,13 +151,10 @@ class Context:
             # Can't use list comprehension here because it breaks
             # intra-context dependencies
             for info in self.build_info["targets"]:
-                self.targets.append(Target(info, self))
+                self.targets.append(createTarget(info, self))
         else:
-            self.targets = [Target(self.build_info, self)]
+            self.targets = [createTarget(self.build_info, self)]
 
-        for target in self.targets:
-            target.process()
-            target.build()
 
     def getTarget(self, target_name):
         for t in self.targets:

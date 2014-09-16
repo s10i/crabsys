@@ -38,6 +38,10 @@ def main():
 
     if args.action == 'build':
         context = Context(directory=os.path.abspath(args.path))
+
+        for target in context.targets:
+            target.process()
+            target.build()
     else:
         print "Action not supported: %s" % (args.action)
 #############################################################################
