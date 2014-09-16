@@ -87,8 +87,6 @@ class Context:
         self.libs_dir = pjoin(self.current_dir, libraries_folder_relative_path)
         self.build_folder = pjoin(self.current_dir, build_folder_relative_path)
 
-        self.cmake_lists_file_path = pjoin(self.build_folder, 'CMakeLists.txt')
-
         self.current_target = None
         self.dynamic_libs = []
 
@@ -165,15 +163,6 @@ class Context:
 
     def processCrabFile(self, build_info):
         self.crab_file_path = pjoin(self.current_dir, 'crab.json')
-
-        try:
-            cmake_file_last_modification = os.stat(self.cmake_lists_file_path).st_mtime
-            crab_file_last_modification = os.stat(self.crab_file_path).st_mtime
-
-            #if crab_file_last_modification < cmake_file_last_modification:
-            #    return
-        except OSError, e:
-            pass
 
         if self.crab_file_path:
             if os.path.isfile(self.crab_file_path):

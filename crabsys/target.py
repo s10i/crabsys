@@ -120,7 +120,7 @@ class BaseTarget(object):
 
     def process(self):
         start_time = time.time()
-        print ("--"*self.context.level) + "-> Processing # %s #" % (self.name)
+        print ("| "*self.context.level) + "-> Processing # %s #" % (self.name)
 
         self.dependencies = [self.context.getContext(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in self.dependencies_infos]
         self.build_dependencies = [self.context.getContext(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in self.build_dependencies_infos]
@@ -137,13 +137,13 @@ class BaseTarget(object):
             self._process()
             self.processed = True
 
-        print ("--"*self.context.level) + "-> Done - %f seconds" % (time.time()-start_time)
+        print ("| "*self.context.level) + "-> Done - %f seconds" % (time.time()-start_time)
 
 
     def shouldBuild(self):
         for dep in self.dependencies:
             if dep.built:
-                print "Because dependency was just built"
+                #print "Because dependency was just built"
                 return True
 
         for target_file in self.target_files:
@@ -154,9 +154,9 @@ class BaseTarget(object):
                 crab_file_last_modification = os.stat(self.context.getOriginalCrabFilePath()).st_mtime
 
                 if crab_file_last_modification > file_last_modification:
-                    print "Because of the file modification dates"
-                    print "Original crab file modification time: ", crab_file_last_modification
-                    print "Target file modification time (%s): %d" % ( target_file_path, file_last_modification )
+                    #print "Because of the file modification dates"
+                    #print "Original crab file modification time: ", crab_file_last_modification
+                    #print "Target file modification time (%s): %d" % ( target_file_path, file_last_modification )
                     return True
             else:
                 return True
@@ -165,7 +165,7 @@ class BaseTarget(object):
 
     def build(self):
         start_time = time.time()
-        print ("--"*self.context.level) + "-> Building # %s #" % (self.name)
+        print ("| "*self.context.level) + "-> Building # %s #" % (self.name)
 
         for dependency in self.dependencies:
             dependency.build()
@@ -174,14 +174,13 @@ class BaseTarget(object):
             dependency.build()
 
         if self.shouldBuild():
-            print "Yes, please"
             self.runBuildSteps(self.pre_build_steps)
             self.runBuildSteps(self.build_steps)
             self.runBuildSteps(self.post_build_steps)
 
             self.built = True
 
-        print ("--"*self.context.level) + "-> Done - %f seconds" % (time.time()-start_time)
+        print ("| "*self.context.level) + "-> Done - %f seconds" % (time.time()-start_time)
 
     def getAllDependenciesIncludesAndBinaries(self):
         includes = []
@@ -254,8 +253,6 @@ class CrabsysTarget(BaseTarget):
                         "lib_destination_path": pjoin(libs_dest_path, lib_basename),
                     })
 
-        print self.build_folder
-        print self.type
         self.generateCMakeListsFile(pystache.render(crabsys_build_cmake_lists_template,
             {
                 'project_name': self.name,

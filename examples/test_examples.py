@@ -107,11 +107,11 @@ CRAB_PATH = os.path.abspath("../crabsys/crabsys.py")
 
 
 ##############################################################################
-def testExamples(examples, keep):
+def testExamples(examples, keep, print_output):
     for e in examples:
-        testExample(e, keep)
+        testExample(e, keep, print_output)
 
-def testExample(example, keep):
+def testExample(example, keep, print_output):
 
     build_folder = os.path.join( example["path"], example.get("build_folder", "build") )
     libs_folder = os.path.join( example["path"], example.get("libs_folder", "libs") )
@@ -153,13 +153,16 @@ def testExample(example, keep):
     # Timed replay
     start_time = time.time()
 
-    p = subprocess.Popen(["python", CRAB_PATH], cwd=example["path"], stdout=subprocess.PIPE)
+    p = subprocess.Popen(["python", CRAB_PATH], cwd=example["path"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     p_output = p.communicate()[0]
     if p.returncode != 0:
         print "Error running crabsys at: ", example["path"]
         print p_output
         exit(4)
-    
+
+    if print_output:
+        print p_output
+
     elapsed_time = time.time() - start_time
 
     if elapsed_time > REPLAY_MAX_TIME:
@@ -175,11 +178,14 @@ def main():
     parser.add_argument('--keep', action='store_true', dest='keep', default=False,
                         help="Keep build and dependencies folders (don't delete them before the first run). Useful for quick testing during development.")
 
+    parser.add_argument('--print', action='store_true', dest='print_output', default=False,
+                        help="Print output of all builds.")
+
     args = parser.parse_args()
 
     #print args
 
-    testExamples(examples, keep=args.keep)
+    testExamples(examples, keep=args.keep, print_output=args.print_output)
 ##############################################################################
 
 
