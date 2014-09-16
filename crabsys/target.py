@@ -33,35 +33,25 @@ def createTarget(target_info, context):
 class BaseTarget(object):
     def __init__(self, target_info, context):
         self.context = context
+        self.info = target_info
+        self.platform_info = {}
 
         self.processed = False
 
         self.name = None
         self.type = None
-        self.parallel_build = True
 
-        self.sources_lists = []
         self.includes = []
         self.target_files = []
-        self.sources = []
 
         self.build_steps = []
         self.pre_build_steps = []
         self.post_build_steps = []
 
-        self.flags = []
-        self.compile_flags = []
-        self.link_flags = []
-
-        self.cmake_search_path = ""
-        self.build_type = "crabsys"
         self.built = False
 
         self.dependencies_infos = []
         self.build_dependencies_infos = []
-
-        self.linux_rpath = ""
-        self.dynamic_libs_destination_path = ""
 
         self.extend(target_info)
 
@@ -72,6 +62,7 @@ class BaseTarget(object):
 
             if platform == sys.platform:
                 self.extend(target_info.get('system_specific')[system])
+                self.platform_info = target_info.get('system_specific')[system]
 
 
     def extend(self, target_info):
@@ -81,37 +72,14 @@ class BaseTarget(object):
             self.type = target_info.get("type")
 
         self.includes += [pjoin(self.context.current_dir, i) for i in target_info.get("includes", [])]
-
-        self.sources_lists += target_info.get("sources_lists", [])
-        for (index, list_id) in enumerate(self.sources_lists):
-            if list_id in self.context.sources_lists_names:
-                self.sources_lists[index] = self.context.sources_lists_names[list_id]
-            else:
-                if list_id < 0 or list_id >= len(self.context.sources_lists_names):
-                    raise Exception("Invalid sources list id: "+str(list_id))
-
-                self.sources_list_index[index] = int(list_id)
-
         self.target_files += processListOfFiles(target_info.get("target_files", []), self.context.current_dir)
-        self.sources += processListOfFiles(target_info.get("sources", []), self.context.current_dir)
-
-        self.flags += asList(target_info.get('flags', []))
-        self.compile_flags += asList(target_info.get('compile_flags', crabsys_config["compile_flags"]))
-        self.link_flags += asList(target_info.get('link_flags', crabsys_config["link_flags"]))
 
         self.pre_build_steps += parseListOfBuildSteps(target_info, self.context, "pre_build_steps")
         self.build_steps += parseListOfBuildSteps(target_info, self.context, "build_steps")
         self.post_build_steps += parseListOfBuildSteps(target_info, self.context, "post_build_steps")
 
-        self.cmake_search_path = target_info.get("search_path", "")
-
-        self.build_type = target_info.get("build_type", self.build_type)
-
         self.dependencies_infos += target_info.get("dependencies", [])
         self.build_dependencies_infos += target_info.get("build_dependencies", [])
-
-        self.dynamic_libs_destination_path = target_info.get("dependencies_dynamic_libs_destination_path", "")
-        self.linux_rpath = pjoin("$ORIGIN", self.dynamic_libs_destination_path)
 
 
     def runBuildSteps(self, steps):
@@ -122,8 +90,21 @@ class BaseTarget(object):
         start_time = time.time()
         print ("| "*self.context.level) + "-> Processing # %s #" % (self.name)
 
-        self.dependencies = [self.context.getContext(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in self.dependencies_infos]
-        self.build_dependencies = [self.context.getContext(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in self.build_dependencies_infos]
+        self.dependencies = [
+            self.context.getContext( parent_context=self.context,
+                                     info=dependency )
+                .getTarget(dependency["name"])
+
+            for dependency in self.dependencies_infos
+        ]
+
+        self.build_dependencies = [
+            self.context.getContext( parent_context=self.context,
+                                     info=dependency)
+                .getTarget(dependency["name"])
+
+            for dependency in self.build_dependencies_infos
+        ]
 
         for dependency in self.dependencies:
             dependency.process()
@@ -226,12 +207,55 @@ class CrabsysTarget(BaseTarget):
     def __init__(self, target_info, context):
         super(CrabsysTarget, self).__init__(target_info, context)
 
+        self.parallel_build = True
+
+        # Flags initialization
+        def joinedOrDefault(name, dict1, dict2, defaults):
+            l = asList(dict1.get(name, []))+asList(dict2.get(name, []))
+            if len(l) == 0:
+                return asList(defaults.get(name, []))
+            return l
+
+        self.flags = joinedOrDefault( 'flags', self.info, self.platform_info,
+            crabsys_config )
+        self.compile_flags = joinedOrDefault( 'compile_flags', self.info,
+            self.platform_info, crabsys_config )
+        self.link_flags = joinedOrDefault( 'link_flags', self.info,
+            self.platform_info, crabsys_config )
+
+        # Sources initialization
+        self.sources_lists = self.info.get("sources_lists", [])
+        self.sources_lists += self.platform_info.get("sources_lists", [])
+
+        self.sources = processListOfFiles(self.info.get("sources", []), self.context.current_dir)
+        self.sources += processListOfFiles(self.platform_info.get("sources", []), self.context.current_dir)
+
+        # Dynamic libs info initialization
+        self.dynamic_libs_destination_path = self.info.get(
+            "dependencies_dynamic_libs_destination_path",
+            self.platform_info.get("dependencies_dynamic_libs_destination_path",
+                "")
+        )
+        self.linux_rpath = pjoin( "$ORIGIN", self.dynamic_libs_destination_path )
+
+
     def _process(self):
         self.processAsCrabsysBuild()
+
 
     def processAsCrabsysBuild(self):
         if len(self.sources) == 0 and len(self.sources_lists) == 0:
             return
+
+        # Process sources lists
+        for (index, list_id) in enumerate(self.sources_lists):
+            if list_id in self.context.sources_lists_names:
+                self.sources_lists[index] = self.context.sources_lists_names[list_id]
+            else:
+                if list_id < 0 or list_id >= len(self.context.sources_lists_names):
+                    raise Exception("Invalid sources list id: "+str(list_id))
+
+                self.sources_list_index[index] = int(list_id)
 
         (dep_includes, dep_binaries) = self.getAllDependenciesIncludesAndBinaries()
 
@@ -325,6 +349,9 @@ class CrabsysTarget(BaseTarget):
 class CMakeTarget(BaseTarget):
     def __init__(self, target_info, context):
         super(CMakeTarget, self).__init__(target_info, context)
+
+        self.cmake_search_path = self.info.get("search_path",
+            self.platform_info.get("search_path", "") )
 
     def _process(self):
         self.processAsCMakeBuild()

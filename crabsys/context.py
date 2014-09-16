@@ -143,16 +143,9 @@ class Context:
                 if 'sources' in sources_list:
                     sources_list["sources"] = processListOfFiles(sources_list["sources"], self.current_dir)
 
-        if "targets" in self.build_info:
-            self.targets = []
-
-            # Can't use list comprehension here because it breaks
-            # intra-context dependencies
-            for info in self.build_info["targets"]:
-                self.targets.append(createTarget(info, self))
-        else:
-            self.targets = [createTarget(self.build_info, self)]
-
+        self.targets = [
+            createTarget(info, self)
+            for info in self.build_info.get("targets", [self.build_info]) ]
 
     def getTarget(self, target_name):
         for t in self.targets:
