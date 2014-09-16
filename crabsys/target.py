@@ -19,10 +19,6 @@ class Target:
     def __init__(self, target_info, context):
         self.context = context
 
-        start_time = time.time()
-        #print ("--"*self.context.level) + "-> Processing # %s #" % (self.name)
-        print ("--"*self.context.level) + "-> Processing # %s #" % ("")
-
         self.processed = False
 
         self.name = None
@@ -46,8 +42,8 @@ class Target:
         self.build_type = "crabsys"
         self.built = False
 
-        self.dependencies = []
-        self.build_dependencies = []
+        self.dependencies_infos = []
+        self.build_dependencies_infos = []
 
         self.linux_rpath = ""
         self.dynamic_libs_destination_path = ""
@@ -61,10 +57,6 @@ class Target:
 
             if platform == sys.platform:
                 self.extend(target_info.get('system_specific')[system])
-
-        print self.name
-
-        print ("--"*self.context.level) + "-> Done - %f seconds" % (time.time()-start_time)
 
 
     def extend(self, target_info):
@@ -100,8 +92,8 @@ class Target:
 
         self.build_type = target_info.get("build_type", self.build_type)
 
-        self.dependencies += [self.context.getContext(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in target_info.get("dependencies", [])]
-        self.build_dependencies += [self.context.getContext(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in target_info.get("build_dependencies", [])]
+        self.dependencies_infos += target_info.get("dependencies", [])
+        self.build_dependencies_infos += target_info.get("build_dependencies", [])
 
         self.dynamic_libs_destination_path = target_info.get("dependencies_dynamic_libs_destination_path", "")
         self.linux_rpath = pjoin("$ORIGIN", self.dynamic_libs_destination_path)
@@ -138,7 +130,20 @@ class Target:
 
         return (includes, binaries)
 
+
     def process(self):
+        start_time = time.time()
+        print ("--"*self.context.level) + "-> Processing # %s #" % (self.name)
+
+        self.dependencies = [self.context.getContext(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in self.dependencies_infos]
+        self.build_dependencies = [self.context.getContext(parent_context=self.context, info=dependency).getTarget(dependency["name"]) for dependency in self.build_dependencies_infos]
+
+        for dependency in self.dependencies:
+            dependency.process()
+
+        for dependency in self.build_dependencies:
+            dependency.process()
+
         self.build_folder = pjoin(self.context.build_folder, "__target_"+self.name)
 
         if not self.processed:
@@ -148,6 +153,9 @@ class Target:
                 self.processAsCrabsysBuild()
 
             self.processed = True
+
+        print ("--"*self.context.level) + "-> Done - %f seconds" % (time.time()-start_time)
+
 
     def processAsCMakeBuild(self):
         search_path = ""
