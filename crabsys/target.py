@@ -111,6 +111,9 @@ class BaseTarget(object):
 
         for dependency in self.build_dependencies:
             dependency.process()
+            dependency.build()
+
+        self.runBuildSteps(self.pre_build_steps)
 
         self.build_folder = pjoin(self.context.build_folder, "__target_"+self.name)
 
@@ -151,17 +154,17 @@ class BaseTarget(object):
         for dependency in self.dependencies:
             dependency.build()
 
-        for dependency in self.build_dependencies:
-            dependency.build()
-
         if self.shouldBuild():
-            self.runBuildSteps(self.pre_build_steps)
             self.runBuildSteps(self.build_steps)
-            self.runBuildSteps(self.post_build_steps)
-
             self.built = True
 
+        self.runBuildSteps(self.post_build_steps)
+        self.postBuild()
+
         print ("| "*self.context.level) + "-> Done - %f seconds" % (time.time()-start_time)
+
+    def postBuild(self):
+        pass
 
     def getAllDependenciesIncludesAndBinaries(self):
         includes = []
@@ -198,6 +201,11 @@ class AutoconfTarget(BaseTarget):
 
     def _process(self):
         pass
+
+    def postBuild(self):
+        for target_file in self.target_files:
+            with open(target_file, 'a'):
+                os.utime(target_file, None)
 ##############################################################################
 
 
@@ -341,6 +349,11 @@ class CrabsysTarget(BaseTarget):
 
     def shouldBuild(self):
         return True
+
+    def postBuild(self):
+        for target_file in self.target_files:
+            with open(target_file, 'a'):
+                os.utime(target_file, None)
 ##############################################################################
 
 
@@ -412,5 +425,10 @@ class CustomBuildTarget(BaseTarget):
 
     def _process(self):
         pass
+
+    def postBuild(self):
+        for target_file in self.target_files:
+            with open(target_file, 'a'):
+                os.utime(target_file, None)
 ##############################################################################
 

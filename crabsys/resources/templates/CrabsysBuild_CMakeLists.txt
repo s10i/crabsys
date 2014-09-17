@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 2.8)
 
 project ({{project_name}})
 
+IF(CMAKE_VERSION VERSION_EQUAL "3.0.0" OR
+   CMAKE_VERSION VERSION_GREATER "3.0.0")
+  CMAKE_POLICY(SET CMP0026 OLD)
+ENDIF()
+
 {{#sources_lists_definitions}}
 set(__LIST_{{index}}_SRCS
 {{#sources}}
